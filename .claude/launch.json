@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "matcha-dev",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set APPDATA=X:/Users/trasru/matcha-store/.netlify/appdata&& npx netlify dev --offline"],
+      "port": 8888
+    }
+  ]
+}
