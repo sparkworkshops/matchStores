@@ -3,17 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#fff6f9">
-<title>ماتشا موتشي</title>
+<meta name="theme-color" content="#fff8fa">
+<title>افتح متجرك</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M18 6q7-5 10 2q-7 3-10-2z' fill='%234a8420'/%3E%3Ccircle cx='20' cy='22' r='16' fill='%238cc152' stroke='%233a3631' stroke-width='3'/%3E%3Ccircle cx='14' cy='22' r='2.4' fill='%233a3631'/%3E%3Ccircle cx='26' cy='22' r='2.4' fill='%233a3631'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Pacifico&family=Nunito:wght@600;700;800;900&family=Baloo+Bhaijaan+2:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shop.css">
+<link rel="stylesheet" href="/admin.css">
+<style>
+.home .lbox{margin-top:70px}
+.home .lbox .btn{margin-top:10px}
+.home .alt{margin-top:22px;text-align:center;font-weight:800}
+</style>
 </head>
-<body>
-<div class="wall" id="wall" aria-hidden="true"></div>
-<div class="app" id="app"></div>
+<body class="adm home">
+<div class="login"><div>
+<div class="lbox">
+ <div id="cat"></div>
+ <h1>افتح متجرك ♡</h1>
+ <p>أنشئ حساب، وأول ما تدخل وتكتب اسم محلك يصير لك رابط خاص فيه يطلبون منه عملاؤك.</p>
+ <a class="btn p" href="/admin#new">أنشئ حساب جديد</a>
+ <a class="btn" href="/admin">عندي حساب، دخول</a>
+</div>
+<div class="alt" id="main"></div>
+</div></div>
+<script>window.MM_LIB=true</script>
 <script src="/shop.js"></script>
+<script>
+{
+const $=s=>document.querySelector(s);
+$('#cat').innerHTML=window.MM.catSVG('happy');
+/* the first store, from before every store had its own link: its customers may still come here */
+fetch('/api/_/home').then(r=>r.json()).then(j=>{if(!j.main)return;const a=document.createElement('a');a.href='/'+encodeURIComponent(j.main.slug);a.textContent='تبي تطلب من '+(j.main.ar||j.main.name||j.main.slug)+'؟ ادخل هنا ←';$('#main').appendChild(a)}).catch(()=>{});
+}
+</script>
 </body>
 </html>

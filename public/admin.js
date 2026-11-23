@@ -2,7 +2,8 @@
 {
 const M=window.MM,esc=M.esc;
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
-const ls={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+/* saved in the browser for this store only */
+const ls={get:M.lsGet,set:M.lsSet};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const money=n=>M.numStr(n)+' ر.س';
 const root=$('#root');
@@ -20,16 +21,21 @@ const ICO={orders:I('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 1
  stamp:I('<circle cx="12" cy="12" r="9.5"/><path d="M12 7.2l1.5 3 3.3.4-2.4 2.3.6 3.3-3-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.4z"/>'),
  gear:I('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')};
 
-/* ---------- talking to the server ---------- */
+/* the store's link for customers: it only exists once the store has a name ("" before that) */
+const shopUrl=()=>A.me&&A.me.slug?'/'+encodeURIComponent(A.me.slug):'';
+const shopShown=()=>location.host+decodeURIComponent(shopUrl());
+
+/* ---------- talking to the server ----------
+   The admin always talks to the store it's logged into (/api/~/…); "/api/_/…" paths are the site's own. */
 async function api(path,{method='GET',body,raw,type,keepalive}={}){
  const o={method,headers:{},keepalive:!!keepalive};
  if(raw){o.body=raw;o.headers['content-type']=type}else if(body!==undefined){o.body=JSON.stringify(body);o.headers['content-type']='application/json'}
- let r;try{r=await fetch('/api/'+path,o)}catch(e){throw Object.assign(new Error('net'),{code:'net'})}
+ let r;try{r=await fetch(path[0]==='/'?path:'/api/~/'+path,o)}catch(e){throw Object.assign(new Error('net'),{code:'net'})}
  let j={};try{j=await r.json()}catch(e){}
- if(r.status===401&&!['login','setup','password'].includes(path)){A.me={setup:false};showLogin();throw Object.assign(new Error('auth'),{code:'auth'})}
+ if(r.status===401&&path[0]!=='/'&&path!=='password'){A.me={admin:false};showLogin();throw Object.assign(new Error('auth'),{code:'auth'})}
  if(!r.ok)throw Object.assign(new Error(j.error||'http'),{code:j.error||'http'});
  return j}
-const errMsg=e=>({net:'ما فيه اتصال بالإنترنت. جرّب مرة ثانية.',server:'صار خطأ عندنا. جرّب بعد شوي.',size:'الصورة كبيرة مرّة. جرّب صورة ثانية.',auth:'انتهى الدخول. سجّل دخول مرة ثانية.'})[e.code]||'ما قدرنا نحفظ. جرّب مرة ثانية.';
+const errMsg=e=>({net:'ما فيه اتصال بالإنترنت. جرّب مرة ثانية.',server:'صار خطأ عندنا. جرّب بعد شوي.',size:'الصورة كبيرة مرّة. جرّب صورة ثانية.',auth:'انتهى الدخول. سجّل دخول مرة ثانية.',nostore:'ما فيه محل بهذا الاسم. تأكد من الرابط.'})[e.code]||'ما قدرنا نحفظ. جرّب مرة ثانية.';
 function toast(msg,bad){$$('.atoast').forEach(e=>e.remove());const e=document.createElement('div');e.className='atoast'+(bad?' bad':'');e.setAttribute('role','status');e.textContent=msg;document.body.appendChild(e);setTimeout(()=>e.remove(),2800)}
 function ask({title,body,ok='تأكيد',cancel='إلغاء',danger}){return new Promise(res=>{const m=document.createElement('div');m.className='modal';
  m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mt"><h2 id="mt">${esc(title)}</h2>${body?`<p>${esc(body)}</p>`:''}<div class="mrow"><button class="btn" data-r="0">${esc(cancel)}</button><button class="btn ${danger?'danger':'p'}" data-r="1">${esc(ok)}</button></div></div>`;
@@ -37,28 +43,32 @@ function ask({title,body,ok='تأكيد',cancel='إلغاء',danger}){return new
  m.addEventListener('click',e=>{if(e.target===m)return done(false);const b=e.target.closest('[data-r]');if(b)done(b.dataset.r==='1')});document.body.appendChild(m);m.querySelector('[data-r="1"]').focus()})}
 
 /* ---------- login ---------- */
-function showLogin(){stopPoll();const setup=!!(A.me&&A.me.setup);
- root.innerHTML=`<div class="login"><form class="lbox" id="lf" novalidate>${M.catSVG(setup?'happy':'hi')}<h1>${setup?'أهلاً! أنشئ حساب المدير':'إدارة '+esc(M.bName(1))}</h1><p>${setup?'اختر اسم مستخدم وكلمة مرور. بتحتاجها كل مرة تدخل، فاحفظها في مكان آمن.':'اكتب اسم المستخدم وكلمة المرور'}</p>
+/* /admin is where every owner logs in, and where a new owner makes an account (the store gets its name and link
+   right after, in the setup) */
+function showLogin(setup=false){stopPoll();
+ root.innerHTML=`<div class="login"><form class="lbox" id="lf" novalidate>${M.catSVG(setup?'happy':'hi')}<h1>${setup?'افتح متجرك ♡':'دخول الإدارة'}</h1><p>${setup?'اختر اسم مستخدم وكلمة مرور. بتحتاجها كل مرة تدخل، فاحفظها في مكان آمن.':'اكتب اسم المستخدم وكلمة المرور'}</p>
 <label class="fld">اسم المستخدم<input name="user" autocomplete="username" autocapitalize="off" spellcheck="false" dir="auto"></label>
 <label class="fld">كلمة المرور<input name="pass" type="password" autocomplete="${setup?'new-password':'current-password'}" dir="ltr"></label>
 ${setup?'<label class="fld">اكتب كلمة المرور مرة ثانية<input name="pass2" type="password" autocomplete="new-password" dir="ltr"></label>':''}
-<p class="lerr" id="lerr" role="alert"></p><button class="btn p" type="submit">${setup?'إنشاء الحساب والدخول':'دخول'}</button></form></div>`;
+<p class="lerr" id="lerr" role="alert"></p><button class="btn p" type="submit">${setup?'إنشاء الحساب والدخول':'دخول'}</button>
+<p class="lswap">${setup?'عندك حساب؟':'ما عندك متجر؟'} <button type="button" class="lnk" id="lswap">${setup?'سجّل دخول':'أنشئ حساب جديد'}</button></p></form></div>`;
+ $('#lswap').addEventListener('click',()=>showLogin(!setup));
  const f=$('#lf');f.user.focus();
  f.addEventListener('submit',async e=>{e.preventDefault();const u=f.user.value.trim(),p=f.pass.value,er=$('#lerr');
   if(u.length<3){er.textContent='اسم المستخدم لازم يكون 3 أحرف أو أكثر';f.user.focus();return}
   if(p.length<6){er.textContent='كلمة المرور لازم تكون 6 أحرف أو أكثر';f.pass.focus();return}
   if(setup&&p!==f.pass2.value){er.textContent='كلمتا المرور مو متطابقتين';f.pass2.focus();return}
   const b=f.querySelector('button[type=submit]');b.disabled=true;er.textContent='';
-  try{await api(setup?'setup':'login',{method:'POST',body:{user:u,pass:p}});A.me=await api('me');await start()}
+  try{await api(setup?'/api/_/signup':'/api/_/login',{method:'POST',body:{user:u,pass:p}});A.me=await api('me');await start()}
   catch(x){b.disabled=false;
-   if(x.code==='exists'){er.textContent='فيه حساب مدير من قبل. سجّل دخول.';A.me.setup=false;setTimeout(showLogin,1600);return}
+   if(x.code==='taken'){er.textContent='اسم المستخدم هذا مأخوذ. اختر اسم ثاني.';f.user.focus();return}
    er.textContent=x.code==='login'?'اسم المستخدم أو كلمة المرور غلط':errMsg(x)}})}
 
 /* ---------- shell + pages ---------- */
 /* [page, name, icon, short name for the phone's bottom bar] */
 const NAV=[['orders','الطلبات',ICO.orders],['drinks','المشروبات',ICO.cup,'مشروبات'],['stamps','الأختام',ICO.stamp],['coupons','الكوبونات',ICO.ticket,'الخصم'],['settings','الإعدادات',ICO.gear],['texts','نصوص الموقع',ICO.text,'النصوص'],['account','الحساب',ICO.user]];
 const navLinks=bottom=>NAV.map(([k,n,ic,sh])=>`<a href="#${k}" data-nav="${k}">${ic}<span>${bottom&&sh?sh:n}</span>${k==='orders'?'<span class="bd" data-bd></span>':''}</a>`).join('');
-function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.logoHTML()}<b>${esc(M.bName(1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" href="/" target="_blank" rel="noopener">افتح المتجر ↗</a></div><div id="outbar"></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks(true)}</nav>`}
+function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.logoHTML()}<b>${esc(M.bName(1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" id="shopl" href="${shopUrl()}" target="_blank" rel="noopener"${shopUrl()?'':' hidden'}>افتح المتجر ↗</a></div><div id="outbar"></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks(true)}</nav>`}
 const page=()=>$('#page');
 function route(){const h=location.hash.slice(1);A.page=NAV.some(n=>n[0]===h)?h:'orders';
  $$('[data-nav]').forEach(a=>{const on=a.dataset.nav===A.page;a.classList.toggle('on',on);on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current')});
@@ -430,6 +440,9 @@ function bindBrand(box,b,redraw){
  box.addEventListener('click',e=>{if(e.target.closest('[data-b=nologo]')){b.logo='';redraw()}})}
 const brandOK=(b,box)=>{if(b.ar.trim()||b.name.trim())return true;const er=$('[data-b=err]',box);if(er)er.textContent='اكتب اسم المحل';$('[data-b=ar]',box)?.focus();return false};
 async function saveBrand(b,ok){try{const j=await api('brand',{method:'PUT',body:{name:b.name.trim(),ar:b.ar.trim(),logo:b.logo,done:!!b.done}});A.brand=j.brand;M.setBrand(A.brand);
+  /* the first name the store gets also makes its link */
+  const had=shopUrl();if(j.slug)A.me.slug=j.slug;const sl=$('#shopl');if(sl&&shopUrl()){sl.href=shopUrl();sl.hidden=false}
+  if(!had&&shopUrl()&&A.page==='account'&&!$('.wiz'))renderAccount();
   const l=$('.ah .logo');if(l)l.innerHTML=`${M.logoHTML()}<b>${esc(M.bName(1))}</b>`;badge();if(ok)toast(ok);return true}
  catch(e){if(e.code!=='auth')toast(errMsg(e),true);return false}}
 
@@ -447,7 +460,7 @@ function runWizard(){$$('.wiz').forEach(x=>x.remove());
 <ol class="wlist">${steps.map((x,i)=>`<li><i>${i+1}</i>${x}</li>`).join('')}</ol><button class="btn p big" data-z="next">يلا نبدأ ←</button></div>`;
   if(s===1)h=`<div class="wbox">${head()}<h2>وش اسم محلك؟</h2><p class="hint">يطلع فوق في كل صفحة، وفي العنوان الكبير بالصفحة الرئيسية، وفي رسائل الواتساب للعملاء.</p>${brandForm(b,{logo:false})}
 <div class="wnav"><button class="btn" data-z="back">→ رجوع</button><button class="btn p" data-z="next">التالي ←</button></div></div>`;
-  if(s===2)h=`<div class="wbox">${head()}<h2>حط شعار محلك</h2><p class="hint">الشعار يطلع جنب اسم المحل فوق كل صفحة، وعلى أيقونة الموقع في المتصفح. الصور المربعة أو الدائرية تطلع أحلى.</p>${brandForm(b,{name:false})}
+  if(s===2)h=`<div class="wbox">${head()}<h2>حط شعار محلك</h2>${shopUrl()?`<div class="wlink">صار لمحلك رابط ♡ أرسله لعملائك عشان يطلبون منه:<a href="${shopUrl()}" target="_blank" rel="noopener" dir="ltr">${esc(shopShown())}</a></div>`:''}<p class="hint">الشعار يطلع جنب اسم المحل فوق كل صفحة، وعلى أيقونة الموقع في المتصفح. الصور المربعة أو الدائرية تطلع أحلى.</p>${brandForm(b,{name:false})}
 <div class="wnav"><button class="btn" data-z="back">→ رجوع</button><button class="btn p" data-z="next">${b.logo?'التالي ←':'تخطَّ، بحطه بعدين ←'}</button></div></div>`;
   if(s===3)h=`<div class="wbox">${head()}<h2>أضف أول مشروب ♡</h2><p>بنفتح لك صفحة المشروب، ونشرح لك كل جزء فيها خطوة بخطوة. وأنت تكتب، تشوف شكل مشروبك عند العميل على طول. مثلاً كذا:</p>
 ${card(A.menu.drinks[0])}
@@ -456,7 +469,7 @@ ${isDemo()?'<p class="wnote">المشروبات اللي في المنيو ال�
 <button class="lnk mut wskip" data-z="skip">${isDemo()?'بعدين، خلّ المشروبات التجريبية الحين':'عندي مشروبات من قبل، تخطَّ'}</button></div>`;
   if(s===4)h=`<div class="wbox wcenter">${M.catSVG('happy')}<h1>محلك جاهز! ♡</h1>${Z.drink?`<p>مشروبك صار في المنيو، وكذا يشوفه العميل:</p>${card(Z.drink)}`:''}
 <ul class="wtips"><li><b>ترتيب المشروبات:</b> من «المشروبات» اضغط «ترتيب المشروبات».</li><li><b>الإضافات والحليب والأحجام:</b> فيها أمثلة جاهزة. افتح أي واحد منها واضغط الزر الأصفر الكبير، ونشرح لك كيف تعدّلها.</li><li><b>اسم المحل والشعار:</b> تغيّرها متى ما تبي من «الحساب».</li><li><b>الاستلام والتوصيل والدفع وموقع المحل وحجم الشعار:</b> من «الإعدادات».</li><li><b>الطلبات:</b> توصلك في «الطلبات» مع صوت تنبيه.</li></ul>
-<div class="wnav"><a class="btn" href="/" target="_blank" rel="noopener">افتح المتجر وشوفه ↗</a><button class="btn p big" data-z="finish">ابدأ ♡</button></div></div>`;
+${shopUrl()?`<div class="wlink">رابط متجرك:<a href="${shopUrl()}" target="_blank" rel="noopener" dir="ltr">${esc(shopShown())}</a></div>`:''}<div class="wnav"><a class="btn" href="${shopUrl()}" target="_blank" rel="noopener">افتح المتجر وشوفه ↗</a><button class="btn p big" data-z="finish">ابدأ ♡</button></div></div>`;
   el.innerHTML=h;el.scrollTop=0;
   if(s===1)setTimeout(()=>$('[data-b=ar]',el)?.focus(),60);else el.querySelector('.btn.p')?.focus({preventScroll:true})};
  bindBrand(el,b,draw);
@@ -464,6 +477,8 @@ ${isDemo()?'<p class="wnote">المشروبات اللي في المنيو ال�
  el.addEventListener('click',async e=>{const t=e.target.closest('[data-z]');if(!t)return;const a=t.dataset.z;
   if(a==='back'){Z.step--;draw()}
   if(a==='next'){if(Z.step===1&&!brandOK(b,el))return;
+   /* saving the name here is what gives the store its link */
+   if(Z.step===1){t.disabled=true;if(!(await saveBrand(b))){t.disabled=false;return}}
    if(Z.step===2){if(b.busy){toast('انتظر لين يخلص رفع الشعار');return}t.disabled=true;if(!(await saveBrand(b))){t.disabled=false;return}}
    Z.step++;draw()}
   if(a==='drink'){openDrink('',{guided:true,onDone:d=>{document.body.style.overflow='hidden';if(d){Z.drink=d;done()}else toast('ما انحفظ المشروب. اضغط الزر وجرّب مرة ثانية ♡')}})}
@@ -493,7 +508,7 @@ function renderTexts(){E.ready=false;E.built='';E.T=[];
 <div class="tbar"><div class="states" role="group" aria-label="أي صفحة">${STATES.map(([k,l])=>`<button data-t="st" data-v="${k}" class="${E.st===k?'on':''}" aria-pressed="${E.st===k}">${l}</button>`).join('')}</div>
 <div class="trow"><span class="lsw" role="group" aria-label="لغة النصوص">${[['ar','عربي'],['en','English']].map(([k,l])=>`<button data-t="lang" data-v="${k}" class="${E.lang===k?'on':''}" aria-pressed="${E.lang===k}">${l}</button>`).join('')}</span><span class="cnt" id="tcnt" aria-live="polite"></span><button class="btn" data-t="discard">تراجع عن التعديلات</button><button class="btn p" data-t="publish">نشر للعملاء</button></div></div>
 <p class="thelp">تقدر تضغط على أي كلمة في الصفحة عشان تروح لمربعها.</p>
-<div class="tstage" id="stage"><div class="pvw" id="pvw"><iframe id="pvf" title="معاينة الموقع كما يشوفه العميل" src="/?edit=1" tabindex="-1"></iframe></div><div id="slices"></div><svg class="arr" id="arr" aria-hidden="true"></svg><div id="tcs"></div></div>
+<div class="tstage" id="stage"><div class="pvw" id="pvw"><iframe id="pvf" title="معاينة الموقع كما يشوفه العميل" src="${shopUrl()||'/~'}?edit=1" tabindex="-1"></iframe></div><div id="slices"></div><svg class="arr" id="arr" aria-hidden="true"></svg><div id="tcs"></div></div>
 <div class="savebar hide" id="tfloat" style="position:fixed;left:12px;right:12px;bottom:84px;z-index:45"><span id="tfn">تعديلات ما انتشرت</span><button class="btn p" data-t="publish">نشر</button></div>`;
  if(matchMedia('(min-width:821px)').matches)$('#tfloat').remove();
  counter()}
@@ -582,7 +597,7 @@ let rzT=0;addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{i
 /* ================= account ================= */
 function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1></div><div class="acct">
 <section class="sec" id="brandsec"></section>
-<section class="sec"><h3>دخلت باسم «${esc(A.me.user||'')}»</h3><p class="hint">احفظ رابط هذي الصفحة عشان ترجع لها: <b dir="ltr">${esc(location.origin)}/admin</b></p><button class="btn" data-a="logout">تسجيل الخروج</button></section>
+<section class="sec"><h3>دخلت باسم «${esc(A.me.user||'')}»</h3><p class="hint">${shopUrl()?`رابط متجرك للعملاء: <a href="${shopUrl()}" target="_blank" rel="noopener" dir="ltr">${esc(shopShown())}</a>`:'متجرك ما له رابط للحين: اكتب اسم المحل فوق واحفظه، ويصير لك رابط.'}</p><p class="hint">احفظ رابط هذي الصفحة عشان ترجع لها: <b dir="ltr">${esc(location.host)}/admin</b></p><button class="btn" data-a="logout">تسجيل الخروج</button></section>
 <form class="sec" id="pwf" novalidate><h3>تغيير كلمة المرور</h3><p class="hint">بعد التغيير، أي جهاز ثاني داخل بالحساب يطلع ويحتاج يدخل من جديد.</p>
 <label class="fld">كلمة المرور الحالية<input name="cur" type="password" autocomplete="current-password" dir="ltr"></label>
 <label class="fld">كلمة المرور الجديدة<input name="nw" type="password" autocomplete="new-password" dir="ltr"></label>
@@ -600,8 +615,8 @@ function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1
   if(f.nw.value.length<6){er.textContent='كلمة المرور الجديدة لازم تكون 6 أحرف أو أكثر';return}if(f.nw.value!==f.nw2.value){er.textContent='كلمتا المرور الجديدة مو متطابقتين';return}
   const u=f.user.value.trim();if(u&&u.length<3){er.textContent='اسم المستخدم لازم يكون 3 أحرف أو أكثر';return}
   try{await api('password',{method:'POST',body:{current:f.cur.value,next:f.nw.value,user:u||undefined}});A.me=await api('me');toast('تم تغيير كلمة المرور ✓');renderAccount()}
-  catch(x){er.textContent=x.code==='login'?'كلمة المرور الحالية غلط':errMsg(x)}})}
-async function logout(){if(!(await ask({title:'تسجيل الخروج؟',ok:'خروج'})))return;try{await api('logout',{method:'POST'})}catch(e){}A.me={setup:false,admin:false};A.orders=null;A.seen=null;showLogin()}
+  catch(x){er.textContent=x.code==='login'?'كلمة المرور الحالية غلط':x.code==='taken'?'اسم المستخدم هذا مأخوذ. اختر اسم ثاني.':errMsg(x)}})}
+async function logout(){if(!(await ask({title:'تسجيل الخروج؟',ok:'خروج'})))return;try{await api('logout',{method:'POST'})}catch(e){}A.me={admin:false};A.orders=null;A.seen=null;showLogin()}
 
 /* ================= stamp cards =================
    Every order gives the customer's phone number one stamp. A full card (8) means the next drink is free. */
@@ -684,7 +699,7 @@ function drawCoupons(){const box=$('#clist');if(!box||!A.coupons)return;const n=
   :`<div class="empty">${M.catSVG('hi')}ما سوّيت كوبونات بعد. اضغط «كوبون جديد» وسوّ أول كود خصم ♡</div>`)}
 async function saveCoupon(c,isNew){const j=await api('coupons/'+encodeURIComponent(c.code),{method:'PUT',body:{...c,new:isNew}});const i=A.coupons.findIndex(x=>x.code===j.coupon.code);
  if(i<0)A.coupons.unshift(j.coupon);else A.coupons[i]=j.coupon;if(A.page==='coupons')drawCoupons();return j.coupon}
-const shareText=c=>`استخدم الكود ${c.code} وخذ ${deal(c)} على طلبك من ${M.bName(1)} ♡${c.min?`\n(للطلبات من ${money(c.min)} وفوق)`:''}${c.until?`\nإلى ${dayStr(c.until)}`:''}\n${location.origin}`;
+const shareText=c=>`استخدم الكود ${c.code} وخذ ${deal(c)} على طلبك من ${M.bName(1)} ♡${c.min?`\n(للطلبات من ${money(c.min)} وفوق)`:''}${c.until?`\nإلى ${dayStr(c.until)}`:''}${shopUrl()?'\n'+location.origin+shopUrl():''}`;
 async function shareCoupon(c){const text=shareText(c);
  try{if(navigator.share){await navigator.share({text});return}}catch(e){if(e&&e.name==='AbortError')return}
  try{await navigator.clipboard.writeText(text);toast('تم نسخ رسالة الكوبون ✓ الصقها في واتساب أو إنستقرام')}catch(e){prompt('انسخ هذي الرسالة:',text)}}
@@ -866,5 +881,7 @@ function settingSteps(){return [
  {el:()=>$('#ssbar:not(.hide)')||$('#s-logo'),title:'لا تنسى تحفظ',body:'<p>التغييرات ما توصل للعملاء إلا لما تضغط <b>«حفظ الإعدادات»</b>. الزر يطلع تحت أول ما تغيّر أي شي.</p>'}]}
 
 /* ================= go ================= */
-(async()=>{try{const[me,shop]=await Promise.all([api('me'),api('shop').catch(()=>null)]);A.me=me;if(shop)M.setBrand(shop.brand);if(A.me.admin)await start();else showLogin()}catch(e){root.innerHTML=`<div class="login"><div class="lbox">${M.catSVG('hi')}<h1>ما قدرنا نفتح الإدارة</h1><p>${esc(errMsg(e))}</p><button class="btn p" onclick="location.reload()">حاول مرة ثانية</button></div></div>`}})();
+/* the admin lives at /admin; old /<store>/admin links land here too */
+if(location.pathname!=='/admin')try{history.replaceState(null,'','/admin'+location.hash)}catch(e){}
+(async()=>{try{A.me=await api('me');if(A.me.admin)await start();else showLogin(location.hash==='#new')}catch(e){root.innerHTML=`<div class="login"><div class="lbox">${M.catSVG('hi')}<h1>ما قدرنا نفتح الإدارة</h1><p>${esc(errMsg(e))}</p><button class="btn p" onclick="location.reload()">حاول مرة ثانية</button></div></div>`}})();
 }

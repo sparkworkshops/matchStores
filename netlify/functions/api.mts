@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import type { Config, Context } from "@netlify/functions";
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 /* ---------- storage ----------
    shop/menu      the menu (drinks, sizes, milks, add-ons)
@@ -18,10 +19,30 @@ import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from
    coupons/c/<CODE>   one discount code: % or SAR off the drinks, with optional limits; counts its own uses
    coupons/p/<CODE>/<phone>  this customer used this code (only for "once per customer" codes)
    coupons/meta   { on: how many codes are switched on }, so the shop only shows the code box when there are any
-   images/<key>   drink photos (served by img.mts) */
-const store = (name: string) => getStore({ name, consistency: "strong" });
+   images/<key>   drink photos (served by img.mts)
 
-const COOKIE = "mm_admin";
+   Many stores live on one site. An owner makes an account at /admin; the store gets its link (/<link name>) the
+   first time they log in and give it a name. The admin is always /admin: the login cookie says which store.
+   Every store keeps all of the above in its own set of storage: the first store (made before there were many)
+   in the plain names ("orders"), each newer one in names ending with its id ("orders-<id>"). Photos are shared:
+   every photo key is random, so stores can't clash.
+   stores/u/<hex of username>   { id } which store a username logs into (usernames are unique across the site)
+   stores/i/<id>                { slug } a store that exists, and its link name ("" until it has one)
+   stores/s/<hex of link name>  { id, slug } which store a link name belongs to (claimed once, never reused) */
+const raw = (name: string) => getStore({ name, consistency: "strong" });
+type Tenant = { id: string; slug: string };
+const TENANT = new AsyncLocalStorage<Tenant>();
+const MAIN = "main";
+const tenant = () => {
+  const t = TENANT.getStore();
+  if (!t) throw new Error("no store");
+  return t;
+};
+/* this store's own storage, for the store the request is for */
+const store = (name: string) => {
+  const t = tenant();
+  return raw(t.id === MAIN ? name : `${name}-${t.id}`);
+};
 const MAX_AGE = 60 * 60 * 24 * 30;
 
 const DEF_MENU = {
@@ -336,9 +357,12 @@ function ntfyOrder(o: any, origin: string) {
   const extra = [o.mode === "delivery" && o.addr ? `📍 ${o.addr}` : "", o.notes ? `📝 ${o.notes}` : "", `📞 ${o.phone}`].filter(Boolean);
   return {
     title: `طلب جديد ${o.no ? "#" + o.no : ""}`.trim(), message: [head, ...lines, ...extra].join("\n").slice(0, 3800),
-    tags: ["tea"], priority: 4, click: `${origin}/admin.html#orders`,
+    tags: ["tea"], priority: 4, click: adminLink(origin),
   };
 }
+
+/* where the owner's phone opens this store's orders */
+const adminLink = (origin: string) => `${origin}/admin#orders`;
 
 async function bumpPulse() {
   try { await store("orders").set("pulse", randomBytes(6).toString("hex")); } catch (e) { console.error(e); }
@@ -373,21 +397,35 @@ const hashPass = (pass: string, salt: string) => scryptSync(pass, salt, 32).toSt
 async function getAuth() {
   return (await store("admin").get("auth", { type: "json" })) as null | { user: string; salt: string; hash: string; ver: number };
 }
+/* The login cookie names the store it's for (t). Cookies from before there were many stores have no t: they're
+   for the first store. Each store signs its cookies with its own secret. */
+const COOKIE = "mm_admin";
+const TID = /^(main|[a-f0-9]{12})$/;
 async function makeCookie(ver: number) {
-  const body = b64u(JSON.stringify({ v: ver, exp: Date.now() + MAX_AGE * 1000 }));
+  const body = b64u(JSON.stringify({ t: tenant().id, v: ver, exp: Date.now() + MAX_AGE * 1000 }));
   const sig = createHmac("sha256", await secret()).update(body).digest("base64url");
   return `${COOKIE}=${body}.${sig}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAX_AGE}`;
 }
-const clearCookie = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+const clearCookie = () => `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+/* which store the browser says it's logged into; isAdmin checks that it really is */
+function cookieStore(ctx: Context) {
+  const c = ctx.cookies.get(COOKIE);
+  if (!c || !c.includes(".")) return "";
+  try {
+    const t = JSON.parse(Buffer.from(c.split(".")[0], "base64url").toString()).t || MAIN;
+    return TID.test(t) ? t : "";
+  } catch { return ""; }
+}
 async function isAdmin(ctx: Context) {
   const c = ctx.cookies.get(COOKIE);
   if (!c || !c.includes(".")) return false;
   const [body, sig] = c.split(".");
   const want = createHmac("sha256", await secret()).update(body).digest();
-  const got = Buffer.from(sig, "base64url");
+  const got = Buffer.from(sig || "", "base64url");
   if (got.length !== want.length || !timingSafeEqual(got, want)) return false;
   try {
     const p = JSON.parse(Buffer.from(body, "base64url").toString());
+    if ((p.t || MAIN) !== tenant().id) return false;
     const auth = await getAuth();
     return !!auth && p.v === auth.ver && p.exp > Date.now();
   } catch { return false; }
@@ -560,7 +598,7 @@ async function trackOrder(id: string, b: any, outside: boolean, origin = "") {
 العميل ينتظر برا، طلّع له طلبه.${o.outsideCount > 1 ? `
 (ضغط الزر ${o.outsideCount} مرات)` : ""}
 📞 ${o.phone}`,
-        tags: ["red_car"], priority: 5, click: `${origin}/admin.html#orders`,
+        tags: ["red_car"], priority: 5, click: adminLink(origin),
       }) : null]);
     }
   }
@@ -602,10 +640,129 @@ async function resolveMapLink(raw: string) {
   return null;
 }
 
+/* ---------- stores and their links ---------- */
+const reg = () => raw("stores");
+/* names that are pages of the site itself, so no store can take them */
+const RESERVED = new Set(["api", "img", "admin", "new", "index", "store", "stores", "shop", "app", "www", "login", "help", "static", "assets"]);
+/* "Matcha Mochi" -> "matcha-mochi"; Arabic names keep their letters: "ماتشا موتشي" -> "ماتشا-موتشي" */
+const slugify = (s: string) =>
+  String(s || "").normalize("NFKC").toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+const SLUG = /^[\p{L}\p{N}][\p{L}\p{N}-]{0,48}$/u;
+const slugKey = (s: string) => "s/" + Buffer.from(s).toString("hex");
+
+/* Give a store the link made from its name. If another store already has it, the next free one:
+   matcha-mochi, then matcha-mochi2, matcha-mochi3… Claiming is one write that only works if the name is
+   free, so two stores made at the same moment with the same name still get different links. */
+async function claimSlug(id: string, name: string) {
+  const base = slugify(name) || "store";
+  for (let n = 1; n < 500; n++) {
+    const slug = n === 1 ? base : base + n;
+    if (RESERVED.has(slug)) continue;
+    const w = await reg().setJSON(slugKey(slug), { id, slug, at: new Date().toISOString() }, { onlyIfNew: true });
+    if (w.modified) {
+      await reg().setJSON(`i/${id}`, { slug });
+      return slug;
+    }
+  }
+  throw new Error("busy");
+}
+const userKey = (u: string) => "u/" + Buffer.from(u.normalize("NFKC").toLowerCase()).toString("hex");
+/* The first store, made before there were many: the first time it's needed, its username is noted and, if it
+   has a name, it gets its link. Its data stays where it was. Returns its link name ("" if none yet). */
+async function ensureMain(): Promise<string> {
+  const had: any = await reg().get(`i/${MAIN}`, { type: "json" });
+  if (had?.u) return had.slug || "";
+  const auth: any = await raw("admin").get("auth", { type: "json" });
+  if (!auth) return had?.slug || "";
+  await reg().setJSON(userKey(auth.user), { id: MAIN }, { onlyIfNew: true });
+  let slug = had?.slug || "";
+  if (!had) {
+    const lock = await reg().setJSON(`i/${MAIN}`, { slug: "" }, { onlyIfNew: true });
+    if (!lock.modified) return "";
+    const b = cleanBrand(await raw("shop").get("brand", { type: "json" }));
+    if (b.name || b.ar) slug = await claimSlug(MAIN, b.name || b.ar);
+  }
+  /* u: its username is noted */
+  await reg().setJSON(`i/${MAIN}`, { slug, u: 1 });
+  return slug;
+}
+async function findStore(part: string): Promise<Tenant | null> {
+  let s = "";
+  try { s = decodeURIComponent(part).normalize("NFKC").toLowerCase(); } catch { return null; }
+  if (!SLUG.test(s)) return null;
+  let r: any = await reg().get(slugKey(s), { type: "json" });
+  if (!r && (await ensureMain()) === s) r = await reg().get(slugKey(s), { type: "json" });
+  return r?.id ? { id: r.id, slug: r.slug } : null;
+}
+/* a store by its id, or null if there's no such store */
+async function storeById(id: string): Promise<Tenant | null> {
+  if (!TID.test(id)) return null;
+  if (id === MAIN) await ensureMain();
+  const r: any = await reg().get(`i/${id}`, { type: "json" });
+  return r ? { id, slug: r.slug || "" } : null;
+}
+
+/* the site's own routes: /api/_/home, /api/_/signup, /api/_/login */
+async function siteRoute(req: Request, part: string) {
+  if (req.method === "GET" && part === "home") {
+    const slug = await ensureMain();
+    if (!slug) return json({ main: null });
+    const b = await TENANT.run({ id: MAIN, slug }, getBrand);
+    return json({ main: { slug, name: b.name, ar: b.ar } });
+  }
+  if (req.method !== "POST" || !["signup", "login"].includes(part)) return fail("route", 404);
+  if (!(req.headers.get("content-type") || "").includes("application/json")) return fail("type", 415);
+  let b: any = {};
+  try { b = await req.json(); } catch {}
+  const user = str(b.user, 40);
+  /* the first store's owner keeps their username */
+  await ensureMain();
+  if (part === "signup") {
+    /* a new account: no name and no link yet. Those come on the first login, in the setup. */
+    if (!goodUser(user) || !goodPass(b.pass)) return fail("weak");
+    const id = randomBytes(6).toString("hex");
+    const w = await reg().setJSON(userKey(user), { id }, { onlyIfNew: true });
+    if (!w.modified) return fail("taken", 409);
+    await reg().setJSON(`i/${id}`, { slug: "" });
+    return TENANT.run({ id, slug: "" }, async () => {
+      const salt = randomBytes(16).toString("hex");
+      await store("admin").setJSON("auth", { user, salt, hash: hashPass(b.pass, salt), ver: 1 });
+      await store("shop").setJSON("brand", { name: "", ar: "", logo: "", done: false });
+      return json({ ok: true }, 200, { "set-cookie": await makeCookie(1) });
+    });
+  }
+  const u: any = goodUser(user) ? await reg().get(userKey(user), { type: "json" }) : null;
+  const t = u ? await storeById(u.id) : null;
+  const ok = t && typeof b.pass === "string" && (await TENANT.run(t, async () => {
+    const auth = await getAuth();
+    return !!auth && timingSafeEqual(Buffer.from(hashPass(b.pass, auth.salt), "hex"), Buffer.from(auth.hash, "hex")) ? auth : null;
+  }));
+  if (!t || !ok) { await wait(700); return fail("login", 401); }
+  return TENANT.run(t, async () => json({ ok: true }, 200, { "set-cookie": await makeCookie(ok.ver) }));
+}
+
 /* ---------- router ---------- */
 export default async (req: Request, ctx: Context) => {
   const url = new URL(req.url);
-  const parts = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
+  const all = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
+  try {
+    if (all[0] === "_") return await siteRoute(req, all[1] || "");
+    /* /api/~/… is the store this browser is logged into (the admin, and the text editor's preview) */
+    const t = all[0] === "~" ? await storeById(cookieStore(ctx)) : await findStore(all[0] || "");
+    if (!t) {
+      if (all[0] === "~") return all[1] === "me" ? json({ admin: false, user: null, slug: null }) : fail("auth", 401);
+      return fail("nostore", 404);
+    }
+    return await TENANT.run(t, () => storeRoute(req, ctx, url, all.slice(1)));
+  } catch (e) {
+    console.error(e);
+    return fail("server", 500);
+  }
+};
+
+/* everything one store does: /api/<link name>/<route> */
+async function storeRoute(req: Request, ctx: Context, url: URL, parts: string[]) {
   const route = `${req.method} ${parts[0] || ""}`;
   const body = async () => { try { return await req.json(); } catch { return {}; } };
   const isJson = (req.headers.get("content-type") || "").includes("application/json");
@@ -615,7 +772,7 @@ export default async (req: Request, ctx: Context) => {
     if (route === "GET shop") {
       const [menu, texts, brand, settings, cm] = await Promise.all([getMenu(), store("shop").get("texts", { type: "json" }), getBrand(), getSettings(),
         store("coupons").get("meta", { type: "json" }) as Promise<any>]);
-      return json({ menu, texts: cleanTexts(texts), brand, settings, coupons: (cm?.on || 0) > 0 });
+      return json({ menu, texts: cleanTexts(texts), brand, settings, coupons: (cm?.on || 0) > 0, slug: tenant().slug });
     }
     /* the customer checks a code before sending the order (the order checks it again) */
     if (route === "POST coupon") {
@@ -641,29 +798,10 @@ export default async (req: Request, ctx: Context) => {
     }
     if (route === "GET me") {
       const auth = await getAuth();
-      return json({ setup: !auth, admin: auth ? await isAdmin(ctx) : false, user: auth && (await isAdmin(ctx)) ? auth.user : null });
+      const admin = !!auth && (await isAdmin(ctx));
+      return json({ admin, user: admin ? auth!.user : null, slug: admin ? tenant().slug : null });
     }
-    if (route === "POST setup") {
-      if (!isJson) return fail("type", 415);
-      const b = await body();
-      const user = str(b.user, 40), pass = b.pass;
-      if (!goodUser(user) || !goodPass(pass)) return fail("weak");
-      const salt = randomBytes(16).toString("hex");
-      const { modified } = await store("admin").setJSON("auth", { user, salt, hash: hashPass(pass, salt), ver: 1 }, { onlyIfNew: true });
-      if (!modified) return fail("exists", 409);
-      return json({ ok: true }, 200, { "set-cookie": await makeCookie(1) });
-    }
-    if (route === "POST login") {
-      if (!isJson) return fail("type", 415);
-      const b = await body();
-      const auth = await getAuth();
-      const user = str(b.user, 40);
-      const ok = !!auth && typeof b.pass === "string" && user.toLowerCase() === auth.user.toLowerCase() &&
-        timingSafeEqual(Buffer.from(hashPass(b.pass, auth.salt), "hex"), Buffer.from(auth.hash, "hex"));
-      if (!ok) { await wait(700); return fail("login", 401); }
-      return json({ ok: true }, 200, { "set-cookie": await makeCookie(auth!.ver) });
-    }
-    if (route === "POST logout") return json({ ok: true }, 200, { "set-cookie": clearCookie });
+    if (route === "POST logout") return json({ ok: true }, 200, { "set-cookie": clearCookie() });
 
     /* everything below is for the admin only */
     if (!(await isAdmin(ctx))) return fail("auth", 401);
@@ -675,8 +813,15 @@ export default async (req: Request, ctx: Context) => {
       if (hashPass(String(b.current || ""), auth.salt) !== auth.hash) { await wait(700); return fail("login", 401); }
       if (!goodPass(b.next)) return fail("weak");
       const user = goodUser(str(b.user, 40)) ? str(b.user, 40) : auth.user;
+      /* a new username must be free across the whole site */
+      const oldK = userKey(auth.user), newK = userKey(user);
+      if (newK !== oldK) {
+        const w = await raw("stores").setJSON(newK, { id: tenant().id }, { onlyIfNew: true });
+        if (!w.modified) return fail("taken", 409);
+      }
       const salt = randomBytes(16).toString("hex"), ver = auth.ver + 1;
       await store("admin").setJSON("auth", { user, salt, hash: hashPass(b.next, salt), ver });
+      if (newK !== oldK) await raw("stores").delete(oldK);
       return json({ ok: true }, 200, { "set-cookie": await makeCookie(ver) });
     }
     if (route === "GET orders") return await listOrders(str(url.searchParams.get("v"), 40));
@@ -712,7 +857,7 @@ export default async (req: Request, ctx: Context) => {
     if (route === "POST ntfy" && parts[1] === "test") {
       const n = await getNtfy();
       if (!n?.topic) return fail("topic");
-      const ok = await ntfySend(n, { title: "تجربة ✓", message: "التنبيهات شغّالة! بيوصلك تنبيه هنا مع كل طلب جديد.", tags: ["white_check_mark"], priority: 4, click: `${url.origin}/admin.html#orders` });
+      const ok = await ntfySend(n, { title: "تجربة ✓", message: "التنبيهات شغّالة! بيوصلك تنبيه هنا مع كل طلب جديد.", tags: ["white_check_mark"], priority: 4, click: adminLink(url.origin) });
       return ok ? json({ ok: true }) : fail("send", 502);
     }
     if (route === "PUT settings") {
@@ -807,7 +952,11 @@ export default async (req: Request, ctx: Context) => {
       if (!isJson) return fail("type", 415);
       const b = cleanBrand(await body());
       await store("shop").setJSON("brand", b);
-      return json({ brand: b });
+      /* the first time the store gets a name, it gets its link. After that the link stays, so links that
+         customers already have keep working. */
+      const t = tenant();
+      if (!t.slug && (b.name || b.ar)) t.slug = await claimSlug(t.id, b.name || b.ar);
+      return json({ brand: b, slug: t.slug });
     }
     if (route === "PUT texts") {
       if (!isJson) return fail("type", 415);
@@ -821,7 +970,7 @@ export default async (req: Request, ctx: Context) => {
       const buf = await req.arrayBuffer();
       if (!buf.byteLength || buf.byteLength > 3_000_000) return fail("size", 413);
       const key = `${Date.now().toString(36)}-${randomBytes(6).toString("hex")}`;
-      await store("images").set(key, buf, { metadata: { type } });
+      await raw("images").set(key, buf, { metadata: { type } });
       return json({ url: `/img/${key}` });
     }
     return fail("route", 404);
@@ -829,6 +978,6 @@ export default async (req: Request, ctx: Context) => {
     console.error(e);
     return fail("server", 500);
   }
-};
+}
 
 export const config: Config = { path: "/api/*" };

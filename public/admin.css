@@ -62,6 +62,9 @@ body.adm{background:radial-gradient(#ffd9e5 2px,transparent 2.6px) 0 0/22px 22px
 .fld{display:block;text-align:start;font-weight:900;font-size:15px;margin-bottom:12px}
 .fld input,.fld textarea,.fld select{display:block;width:100%;padding:10px 14px;border-radius:16px;border:2.5px solid var(--line);background:var(--green3);margin-top:4px;min-height:48px;font-weight:700}
 .fld input:focus,.fld textarea:focus,.fld select:focus{background:#fff}
+.lswap{margin:14px 0 0!important;font-size:15px}
+.wlink{background:var(--green3);border:2.5px solid var(--line);border-radius:18px;padding:10px 14px;margin:0 0 14px;font-weight:800}
+.wlink a{display:block;direction:ltr;font-weight:900;font-size:17px;word-break:break-all;margin-top:4px}
 .lerr{color:#d6245b;font-weight:900;min-height:1.4em;margin:0 0 8px}
 .lbox .btn{width:100%;min-height:54px;font-size:18px}
 /* orders */

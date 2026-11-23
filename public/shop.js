@@ -1,14 +1,20 @@
 /* Matcha Mochi — the customer shop.
-   index.html runs it as the shop; index.html?edit=1 runs it as the still preview inside the admin text editor;
-   admin.html loads it with window.MM_LIB set, only to borrow the texts and drawings. */
+   /<store> (store.html) runs it as that store's shop; /<store>?edit=1 runs it as the still preview inside the admin
+   text editor; /<store>/admin (admin.html) loads it with window.MM_LIB set, only to borrow the texts and drawings. */
 {
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const L='#3a3631',MAXQ=3;
 const rand=a=>a[Math.floor(Math.random()*a.length)];
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};
-const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const LIB=!!window.MM_LIB;
+/* which store this is: the first part of the link (/matcha-mochi, /matcha-mochi/admin). The admin page at a bare
+   /admin has none. Every call to the server and everything saved in the browser belongs to this store only. */
+const SLUG=(()=>{const p=location.pathname.split('/').filter(Boolean);if(LIB&&p.length<2)return '';try{return decodeURIComponent(p[0]||'').normalize('NFKC').toLowerCase()}catch(e){return ''}})();
+const API='/api/'+encodeURIComponent(SLUG)+'/';
+const lsK=k=>SLUG+':'+k;
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(lsK(k));return v===null?d:JSON.parse(v)}catch(e){return d}};
+const lsSet=(k,v)=>{try{localStorage.setItem(lsK(k),JSON.stringify(v))}catch(e){}};
+const lsDel=k=>{try{localStorage.removeItem(lsK(k))}catch(e){}};
 const EDIT=!LIB&&new URLSearchParams(location.search).has('edit');
 const clone=o=>JSON.parse(JSON.stringify(o));
 
@@ -262,7 +268,7 @@ const BAG=`<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h18l-2 16H9
 
 /* the admin page borrows these */
 window.MM={TX,TOKENS,esc,drinkArt,icon,cupSVG,catSVG,LOGO,logoHTML,pawSVG,waText,moneyL,numStr,orderNo,bName,halves,DEF_NAME,cpCode,
- setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},setBrand,getBrand:()=>BRAND,rawL,lum,onC,setSettings,setLogoSize,mapLinks,mapEmbed,PAYS};
+ SLUG,API,lsGet,lsSet,setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},setBrand,getBrand:()=>BRAND,rawL,lum,onC,setSettings,setLogoSize,mapLinks,mapEmbed,PAYS};
 if(LIB){/* library only */}else{
 
 /* ================= shared bits ================= */
@@ -284,7 +290,7 @@ const outBtn=L=>{const c=outCool(L);return `<button class="cta outb ${c?'sent':'
 const payFee=()=>S.pay.mode==='delivery'&&(EDIT||SET.delivery)?(+SET.fee||0):0;
 const payDisc=()=>discOf(S.coupon,cartTotal());
 const payTotal=()=>cartTotal()-payDisc()+payFee();
-const saveCp=()=>{if(EDIT)return;if(S.coupon)lsSet('mm-coupon',S.coupon);else try{localStorage.removeItem('mm-coupon')}catch(e){}};
+const saveCp=()=>{if(EDIT)return;if(S.coupon)lsSet('mm-coupon',S.coupon);else lsDel('mm-coupon')};
 const CPMSG={none:'cpNone',off:'cpEnded',ended:'cpEnded',used:'cpUsed',once:'cpOnce',min:'cpMin'};
 const cpMsg=(why,min)=>CPMSG[why]?tp(CPMSG[why],{n:moneyL(min||0,ix())}):tp('eServer');
 /* the discount code box on the order page */
@@ -513,7 +519,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function postOrder(body){let last={r:null,j:{}};
  for(let i=0;i<3;i++){if(i)await sleep(1500*i);
   const ac=window.AbortController?new AbortController():null,to=setTimeout(()=>ac&&ac.abort(),15000);
-  try{const r=await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:ac?.signal});const j=await r.json().catch(()=>({}));
+  try{const r=await fetch(API+'orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:ac?.signal});const j=await r.json().catch(()=>({}));
    if(r.status>=500||r.status===408||r.status===429){last={r,j};continue}
    return {r,j}}
   catch(e){last={r:null,j:{}}}
@@ -531,13 +537,13 @@ async function sendOrder(){if(S.sending||S.paid)return false;S.sending=true;lock
   if(r&&(j.error==='menu'||j.error==='items')){await loadShop().catch(()=>{});fixCart();S.step='cart';render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eMenu');$('main')?.prepend(p);return false}
   if(r&&(j.error==='mode'||j.error==='method')){await loadShop().catch(()=>{});render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eSettings');$('main')?.prepend(p);return false}
   const map=r&&{name:['name','eName'],phone:['phone','ePhone'],addr:['addr','eAddr']}[j.error];showErr(map?[map[0],tp(map[1])]:['',tp('eServer')]);return false}
- try{localStorage.removeItem(PENDK)}catch(e){}
+ lsDel(PENDK)
  S.ready=readyWin();
  S.last={id:j.id,cid:pend.cid,no:j.no,items:clone(S.cart),total:j.total,fee:+j.fee||0,discount:+j.discount||0,coupon:j.coupon||'',mode:j.mode||P.mode,name:P.name,at:Date.now(),ready:S.ready};lsSet(LASTK,S.last);
  S.cart=[];saveCart();S.pay.notes='';S.coupon=null;S.cpOpen=false;saveCp();
  S.paid=true;S.stamps=typeof j.stamps==='number'?j.stamps:Math.min(8,S.stamps+1);lsSet('mm-stamps',S.stamps);S.sending=false;render(true);setTimeout(()=>rain('mix',60),200);return true}
 /* the stamp count the shop has for this order's phone (the admin can change it) */
-async function refreshTrack(L){if(!L||!L.id||!L.cid)return;try{const r=await fetch(`/api/track/${encodeURIComponent(L.id)}?k=${encodeURIComponent(L.cid)}`,{cache:'no-store'});if(!r.ok)return;const j=await r.json();
+async function refreshTrack(L){if(!L||!L.id||!L.cid)return;try{const r=await fetch(`${API}track/${encodeURIComponent(L.id)}?k=${encodeURIComponent(L.cid)}`,{cache:'no-store'});if(!r.ok)return;const j=await r.json();
  if(typeof j.stamps==='number'&&j.stamps!==S.stamps){S.stamps=j.stamps;lsSet('mm-stamps',S.stamps);if(S.paid&&S.step==='pay'&&S.last&&S.last.id===L.id){const y=scrollY;render();scrollTo(0,y)}}}catch(e){}}
 
 /* ================= Mochi's mischief: he only repaints things, nothing moves ================= */
@@ -598,7 +604,7 @@ const ACT={
  cpoff:()=>{S.coupon=null;S.cpOpen=true;saveCp();keepRender()},
  cpapply:async()=>{const inp=$('#cpin'),er=$('#cperr'),go=$('#cpgo');if(!inp||S.cpBusy)return;const code=inp.value.trim();if(!code){inp.focus();return}
   S.cpBusy=true;go.disabled=true;go.textContent=tp('cpChecking');er.textContent='';let j={},r=null;
-  try{r=await fetch('/api/coupon',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,subtotal:cartTotal(),phone:S.pay.phone})});j=await r.json().catch(()=>({}))}catch(e){}
+  try{r=await fetch(API+'coupon',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,subtotal:cartTotal(),phone:S.pay.phone})});j=await r.json().catch(()=>({}))}catch(e){}
   S.cpBusy=false;
   if(r&&r.ok&&j.coupon){S.coupon=j.coupon;saveCp();keepRender();const b=$('.cpon');if(b){const q=b.getBoundingClientRect();burst(q.left+30,q.top+20,8,'h')}return}
   if(!go.isConnected)return;go.disabled=false;go.textContent=tp('cpApply');er.textContent=r&&j.error==='coupon'?cpMsg(j.why,j.min):tp('eServer');inp.focus()},
@@ -609,7 +615,7 @@ const ACT={
  /* "I'm outside": tells the store once, then rests for a short while so it can't be spammed */
  outside:async(a,el)=>{const L=S.paid&&S.last&&S.last.id?S.last:recentPickup();if(!L||!L.id||!L.cid||outCool(L)||el.disabled)return;
   el.disabled=true;el.classList.add('busy');const er=$('#outerr');if(er)er.textContent='';let ok=false;
-  try{const r=await fetch('/api/track/'+encodeURIComponent(L.id),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({k:L.cid,outside:true})});const j=await r.json().catch(()=>({}));ok=r.ok;if(ok&&typeof j.stamps==='number'){S.stamps=j.stamps;lsSet('mm-stamps',S.stamps)}}catch(e){}
+  try{const r=await fetch(API+'track/'+encodeURIComponent(L.id),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({k:L.cid,outside:true})});const j=await r.json().catch(()=>({}));ok=r.ok;if(ok&&typeof j.stamps==='number'){S.stamps=j.stamps;lsSet('mm-stamps',S.stamps)}}catch(e){}
   if(!ok){el.disabled=false;el.classList.remove('busy');const e2=$('#outerr');if(e2)e2.textContent=tp('outsideErr');else alert(tp('outsideErr'));return}
   L.outAt=Date.now();const st=lsGet(LASTK,null);if(st&&st.id===L.id){st.outAt=L.outAt;lsSet(LASTK,st)}if(S.last&&S.last.id===L.id)S.last.outAt=L.outAt;
   const swap=()=>$$('[data-act=outside]').forEach(b=>{b.outerHTML=outBtn(L)});swap();
@@ -626,7 +632,10 @@ const keepRender=()=>{const y=scrollY;render();scrollTo(0,y)};
 const keepPay=()=>{const P=S.pay;lsSet('mm-pay',{name:P.name,phone:P.phone,addr:P.addr,mode:P.mode,method:P.method})};
 
 /* ================= data ================= */
-async function loadShop(){const r=await fetch('/api/shop',{cache:'no-store'});if(!r.ok)throw new Error('shop '+r.status);const j=await r.json();if(!EDIT)lsSet('mm-shop',j);return useShop(j)}
+async function loadShop(){const r=await fetch(API+'shop',{cache:'no-store'});if(!r.ok)throw Object.assign(new Error('shop '+r.status),{status:r.status});const j=await r.json();if(!EDIT)lsSet('mm-shop',j);
+ /* the link the customer typed may differ in capitals: show the store's own one */
+ if(j.slug&&j.slug!==SLUG&&!EDIT)try{history.replaceState(null,'','/'+encodeURIComponent(j.slug)+location.search+location.hash)}catch(e){}
+ return useShop(j)}
 function useShop(j){const before=JSON.stringify([STORE,OV,BRAND,SET,S.hasCp]);STORE=j.menu;if(!EDIT)OV=j.texts||{};setBrand(j.brand);setSettings(j.settings);
  /* the code box only shows when the store has codes switched on */
  S.hasCp=!!j.coupons;if(!S.hasCp&&S.coupon){S.coupon=null;saveCp()}
@@ -673,7 +682,8 @@ if(!EDIT)setInterval(()=>{if(RM)return;const eyes=$$('.cup .ey, .logo .ey');eyes
 if(EDIT){loadShop().then(()=>parent.postMessage({mm:'ready'},location.origin)).catch(()=>{$('#app').innerHTML='<p class="oops">تعذّر تحميل المعاينة</p>'})}
 else{const cached=lsGet('mm-shop',null);
  if(cached&&cached.menu){useShop(cached);render()}else render();
- const fail=()=>{if(!STORE.drinks.length)$('#app').innerHTML=`<div class="loading"><div>${logoHTML()}<p>${esc(LANG==='ar'?'تعذّر فتح المحل. تأكد من الإنترنت وحدّث الصفحة.':'We couldn’t open the shop. Check your internet and refresh.')}</p></div></div>`};
+ const fail=e=>{if(e&&e.status===404){$('#app').innerHTML=`<div class="loading"><div>${logoHTML()}<p>${esc(LANG==='ar'?'ما فيه محل بهذا الاسم. تأكد من الرابط.':'There’s no shop with this name. Check the link.')}</p><p><a href="/">${esc(LANG==='ar'?'الصفحة الرئيسية':'Home page')}</a></p></div></div>`;return}
+  if(!STORE.drinks.length)$('#app').innerHTML=`<div class="loading"><div>${logoHTML()}<p>${esc(LANG==='ar'?'تعذّر فتح المحل. تأكد من الإنترنت وحدّث الصفحة.':'We couldn’t open the shop. Check your internet and refresh.')}</p></div></div>`};
  loadShop().then(ch=>{if(ch&&!S.sending&&!holdActive){const y=scrollY;render();scrollTo(0,y)}}).catch(fail);
  sched()}
 }
