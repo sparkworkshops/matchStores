@@ -7,6 +7,7 @@ import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from
    shop/texts     published text changes { key: [english, arabic] }
    shop/brand     the store's name and logo { name, ar, logo, done }
    admin/auth     { user, salt, hash, ver }
+   admin/ntfy     where phone notifications go { server, topic, token, orders, outside } (never sent to the shop)
    admin/secret   random key used to sign the admin cookie
    shop/settings  how the store takes orders: pickup/delivery, fee, payment methods, location, logo size
    orders/o/<id>  one order per key; ids start with the time so they sort newest-last
@@ -14,6 +15,9 @@ import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from
                   same order finds this and gets the first order back instead of making a second one.
    orders/pulse   changes whenever any order changes, so the admin only reloads the list when needed
    loyalty/c/<phone>  one stamp card per customer phone number
+   coupons/c/<CODE>   one discount code: % or SAR off the drinks, with optional limits; counts its own uses
+   coupons/p/<CODE>/<phone>  this customer used this code (only for "once per customer" codes)
+   coupons/meta   { on: how many codes are switched on }, so the shop only shows the code box when there are any
    images/<key>   drink photos (served by img.mts) */
 const store = (name: string) => getStore({ name, consistency: "strong" });
 
@@ -196,6 +200,146 @@ async function backfillCards() {
   }
 }
 
+/* ---------- coupons ---------- */
+/* codes are kept in capital English letters and digits; Arabic digits typed by a customer count too */
+const normCode = (v: unknown) =>
+  String(v ?? "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .toUpperCase().replace(/[\s_-]+/g, "").slice(0, 30);
+const CODE = /^[A-Z0-9]{3,20}$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+type Coupon = {
+  code: string; kind: "pct" | "amt"; value: number; min: number; limit: number; once: boolean; until: string; on: boolean;
+  uses: number; given: number; recent: string[]; createdAt: string; updatedAt: string;
+};
+/* what the admin can set; uses and totals are only ever changed by orders */
+function cleanCoupon(c: any) {
+  const kind: "pct" | "amt" = c?.kind === "amt" ? "amt" : "pct";
+  const value = kind === "pct" ? Math.min(100, Math.round(num(c?.value, 100))) : num(c?.value, 10000);
+  return {
+    code: normCode(c?.code), kind, value, min: num(c?.min, 100000), limit: Math.floor(num(c?.limit, 1e6)),
+    once: c?.once === true, until: typeof c?.until === "string" && DAY.test(c.until) ? c.until : "", on: c?.on !== false,
+  };
+}
+/* the store's days are Saudi days: a code "until 2026-12-31" works to the end of that day there */
+const endOfDay = (d: string) => Date.parse(`${d}T23:59:59.999+03:00`);
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const discountOf = (c: Pick<Coupon, "kind" | "value">, subtotal: number) =>
+  round2(Math.min(subtotal, c.kind === "pct" ? (subtotal * c.value) / 100 : c.value));
+/* why a code can't be used right now, or "" if it can */
+function couponProblem(c: Coupon | null, subtotal: number | null) {
+  if (!c) return "none";
+  if (!c.on) return "off";
+  if (c.until && Date.now() > endOfDay(c.until)) return "ended";
+  if (c.limit && c.uses >= c.limit) return "used";
+  if (subtotal !== null && c.min && subtotal < c.min) return "min";
+  return "";
+}
+const couponPublic = (c: Coupon) => ({ code: c.code, kind: c.kind, value: c.value, min: c.min, once: c.once });
+const getCoupon = async (code: string) =>
+  CODE.test(code) ? ((await store("coupons").get(`c/${code}`, { type: "json" })) as Coupon | null) : null;
+async function couponsMeta() {
+  const s = store("coupons");
+  const { blobs } = await s.list({ prefix: "c/" });
+  const read = (await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })))) as (Coupon | null)[];
+  /* one entry per code, even if storage lists a leftover copy */
+  const all = [...new Map(read.filter((c): c is Coupon => !!c && CODE.test(c.code)).map((c) => [c.code, c])).values()];
+  await s.setJSON("meta", { on: all.filter((c) => c.on).length });
+  return all;
+}
+/* read, change, write; if an order used the code in between, try again with the new count */
+async function updateCoupon(code: string, change: (c: Coupon) => Coupon | null | "stop"): Promise<Coupon | null> {
+  const s = store("coupons");
+  for (let i = 0; i < 8; i++) {
+    const r: any = await s.getWithMetadata(`c/${code}`, { type: "json" });
+    if (!r?.data) return null;
+    const next = change({ ...r.data, recent: [...(r.data.recent || [])] });
+    if (next === "stop") return null;
+    if (!next) return r.data;
+    next.updatedAt = new Date().toISOString();
+    const w = await s.setJSON(`c/${code}`, next, { onlyIfMatch: r.etag });
+    if (w.modified) return next;
+    await wait(30 + Math.random() * 120);
+  }
+  throw new Error("busy");
+}
+/* An order uses the code: one use per order (a retry of the same order isn't counted again),
+   and for "once per customer" codes, one order per phone number. Returns a problem, or "" when it's used. */
+async function useCoupon(code: string, cid: string, phone: string, subtotal: number, discount: number) {
+  const s = store("coupons");
+  let lock = "";
+  const c0 = await getCoupon(code);
+  if (c0?.once) {
+    lock = `p/${code}/${phone}`;
+    const w = await s.setJSON(lock, { cid, at: new Date().toISOString() }, { onlyIfNew: true });
+    if (!w.modified) {
+      const had: any = await s.get(lock, { type: "json" });
+      if (had?.cid !== cid) return "once";
+      lock = "";
+    }
+  }
+  let why = "none";
+  try {
+    await updateCoupon(code, (c) => {
+      why = "";
+      if (c.recent.includes(cid)) return null;
+      why = couponProblem(c, subtotal);
+      if (why) return "stop";
+      c.uses++; c.given = round2((c.given || 0) + discount); c.recent = [cid, ...c.recent].slice(0, 50);
+      return c;
+    });
+  } catch (e) { why = "busy"; }
+  if (why && lock) await s.delete(lock).catch(() => {});
+  return why;
+}
+
+/* ---------- phone notifications through ntfy (https://ntfy.sh) ----------
+   admin/ntfy holds where to send them. It stays on the server: anyone who knows the topic can read the
+   notifications, and they carry customer names and phone numbers. */
+type Ntfy = { server: string; topic: string; token: string; orders: boolean; outside: boolean };
+const TOPIC = /^[A-Za-z0-9_-]{6,64}$/;
+function cleanNtfy(n: any, had?: Ntfy | null): Ntfy {
+  let server = str(n?.server, 200).replace(/\/+$/, "") || "https://ntfy.sh";
+  try { const u = new URL(server); if (!/^https?:$/.test(u.protocol)) throw 0; server = u.origin + u.pathname.replace(/\/+$/, ""); } catch { server = "https://ntfy.sh"; }
+  /* the token is never sent to the browser: "keep" leaves the saved one as it is */
+  const token = n?.token === undefined ? had?.token || "" : str(n.token, 200);
+  return { server, topic: TOPIC.test(n?.topic) ? n.topic : "", token, orders: n?.orders !== false, outside: n?.outside !== false };
+}
+const getNtfy = async () => {
+  const n = await store("admin").get("ntfy", { type: "json" });
+  return n ? cleanNtfy(n, n as Ntfy) : null;
+};
+const ntfyPublic = (n: Ntfy | null) =>
+  n ? { server: n.server, topic: n.topic, hasToken: !!n.token, orders: n.orders, outside: n.outside } : null;
+/* send one notification. Never throws, and gives up after a few seconds so a slow ntfy can't hold up an order. */
+async function ntfySend(n: Ntfy | null, msg: { title: string; message: string; tags?: string[]; priority?: number; click?: string }) {
+  if (!n || !n.topic) return false;
+  try {
+    const r = await fetch(n.server + "/", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(n.token ? { authorization: `Bearer ${n.token}` } : {}) },
+      body: JSON.stringify({ topic: n.topic, ...msg }),
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) console.error("ntfy", r.status, (await r.text()).slice(0, 200));
+    return r.ok;
+  } catch (e) { console.error("ntfy", e); return false; }
+}
+const arMoney = (v: number) => `${round2(v)} ر.س`;
+function ntfyOrder(o: any, origin: string) {
+  const lines = (o.items || []).map((it: any) => {
+    const p = [it.size?.ar || it.size?.name];
+    if (it.milk) p.push(it.milk.ar || it.milk.name);
+    for (const a of it.addons || []) p.push((a.ar || a.name) + (a.q > 1 ? ` ×${a.q}` : ""));
+    return `• ${it.qty}× ${it.ar || it.name} (${p.join("، ")})`;
+  });
+  const head = `${o.name} · ${o.mode === "delivery" ? "توصيل 🛵" : "استلام من المحل"} · ${arMoney(o.total)}`;
+  const extra = [o.mode === "delivery" && o.addr ? `📍 ${o.addr}` : "", o.notes ? `📝 ${o.notes}` : "", `📞 ${o.phone}`].filter(Boolean);
+  return {
+    title: `طلب جديد ${o.no ? "#" + o.no : ""}`.trim(), message: [head, ...lines, ...extra].join("\n").slice(0, 3800),
+    tags: ["tea"], priority: 4, click: `${origin}/admin.html#orders`,
+  };
+}
+
 async function bumpPulse() {
   try { await store("orders").set("pulse", randomBytes(6).toString("hex")); } catch (e) { console.error(e); }
 }
@@ -257,9 +401,11 @@ const CID = /^[A-Za-z0-9-]{16,64}$/;
 const OID = /^[0-9]+-[a-f0-9]+$/;
 /* what the customer's browser gets back for a saved order (the same answer for the first try and any retry) */
 const orderReply = (o: any, stamps: number | null, dup: boolean) =>
-  json({ id: o.id, no: o.no, total: o.total, subtotal: o.subtotal ?? o.total, fee: o.fee || 0, mode: o.mode, createdAt: o.createdAt, stamps, dup });
+  json({ id: o.id, no: o.no, total: o.total, subtotal: o.subtotal ?? o.total, fee: o.fee || 0, discount: o.discount || 0, coupon: o.coupon?.code || "",
+    mode: o.mode, createdAt: o.createdAt, stamps, dup });
+const couponFail = (why: string, c?: Coupon | null) => json({ error: "coupon", why, min: c?.min || 0 }, 409);
 
-async function createOrder(b: any) {
+async function createOrder(b: any, origin: string) {
   /* the order's own id, made once in the customer's browser and sent again on every retry.
      Old pages that don't send one still work, they just don't get the retry protection. */
   const cid = typeof b.cid === "string" && CID.test(b.cid) ? b.cid : randomBytes(12).toString("hex") + "-srv";
@@ -309,10 +455,19 @@ async function createOrder(b: any) {
       addons: ads, qty, unit, line: unit * qty,
     });
   }
-  const round = (n: number) => Math.round(n * 100) / 100;
+  const round = round2;
   const subtotal = round(items.reduce((s, i) => s + i.line, 0));
   const fee = mode === "delivery" ? round(set.fee) : 0;
-  const total = round(subtotal + fee);
+  /* a discount code takes money off the drinks only, never the delivery fee */
+  let coupon: Coupon | null = null, discount = 0;
+  const code = normCode(b.coupon);
+  if (code) {
+    coupon = await getCoupon(code);
+    const why = couponProblem(coupon, subtotal);
+    if (why) return couponFail(why, coupon);
+    discount = discountOf(coupon!, subtotal);
+  }
+  const total = round(subtotal - discount + fee);
 
   /* The saved order's id and number come from the customer's cid (and the time their browser made it), so
      copies of the same order that arrive at the same moment all land on the same record and can't become two.
@@ -321,6 +476,11 @@ async function createOrder(b: any) {
   const at = Math.floor(Number(b.at));
   const ts = Number.isFinite(at) && Math.abs(Date.now() - at) < 15 * 60_000 ? at : Date.now();
   let claim = claimed || { id: `${ts}-${h.slice(0, 6)}`, no: String(1000 + (parseInt(h.slice(6, 14), 16) % 9000)), createdAt: new Date(ts).toISOString() };
+  /* count the code's use now, so the last use of a limited code can't go to two orders */
+  if (coupon) {
+    const why = await useCoupon(coupon.code, cid, phoneKey(phone), subtotal, discount);
+    if (why) return couponFail(why, coupon);
+  }
   if (!claimed) {
     const r = await os.setJSON(`k/${cid}`, claim, { onlyIfNew: true });
     if (!r.modified) claim = ((await os.get(`k/${cid}`, { type: "json" })) as any) || claim;
@@ -329,13 +489,15 @@ async function createOrder(b: any) {
   const before = (await getCard(key))?.stamps ?? 0;
   const order: any = {
     id: claim.id, no: claim.no, createdAt: claim.createdAt, cid, name, phone, mode, addr, notes, method, lang,
-    items, subtotal, fee, total, paid: false, status: "new", stamped: true, cardBefore: before,
+    items, subtotal, fee, discount, ...(coupon ? { coupon: { code: coupon.code, kind: coupon.kind, value: coupon.value } } : {}), total, paid: false, status: "new", stamped: true, cardBefore: before,
   };
   const w = await os.setJSON(`o/${claim.id}`, order, { onlyIfNew: true });
   if (!w.modified) {
     const saved: any = await os.get(`o/${claim.id}`, { type: "json" });
     return orderReply(saved || order, (await getCard(key))?.stamps ?? null, true);
   }
+  /* tell the owner's phone, while the stamp is being added */
+  const ping = getNtfy().then((n) => (n?.orders ? ntfySend(n, ntfyOrder(order, origin)) : false)).catch(() => false);
   /* a stamp for this order. The card stops at full until the free drink is used. */
   let stamps: number | null = null;
   try {
@@ -352,7 +514,7 @@ async function createOrder(b: any) {
     });
     stamps = c?.stamps ?? null;
   } catch (e) { console.error(e); }
-  await bumpPulse();
+  await Promise.all([bumpPulse(), ping]);
   return orderReply(order, stamps, false);
 }
 
@@ -378,7 +540,7 @@ async function listOrders(v: string) {
 
 /* the customer's own order, opened with the id their browser made. Used for "I'm outside". */
 const OUT_COOL = 30_000;
-async function trackOrder(id: string, b: any, outside: boolean) {
+async function trackOrder(id: string, b: any, outside: boolean, origin = "") {
   if (!OID.test(id) || typeof b.k !== "string" || !CID.test(b.k)) return fail("bad");
   const s = store("orders"), key = `o/${id}`;
   const o: any = await s.get(key, { type: "json" });
@@ -391,7 +553,15 @@ async function trackOrder(id: string, b: any, outside: boolean) {
       o.outsideAt = new Date().toISOString();
       o.outsideCount = (o.outsideCount || 0) + 1;
       await s.setJSON(key, o);
-      await bumpPulse();
+      const n = await getNtfy().catch(() => null);
+      await Promise.all([bumpPulse(), n?.outside ? ntfySend(n, {
+        title: `🚗 ${o.name} برا المحل`,
+        message: `طلب ${o.no ? "#" + o.no : ""} · ${arMoney(o.total)}
+العميل ينتظر برا، طلّع له طلبه.${o.outsideCount > 1 ? `
+(ضغط الزر ${o.outsideCount} مرات)` : ""}
+📞 ${o.phone}`,
+        tags: ["red_car"], priority: 5, click: `${origin}/admin.html#orders`,
+      }) : null]);
     }
   }
   const card = await getCard(phoneKey(o.phone));
@@ -443,18 +613,31 @@ export default async (req: Request, ctx: Context) => {
   try {
     /* public */
     if (route === "GET shop") {
-      const [menu, texts, brand, settings] = await Promise.all([getMenu(), store("shop").get("texts", { type: "json" }), getBrand(), getSettings()]);
-      return json({ menu, texts: cleanTexts(texts), brand, settings });
+      const [menu, texts, brand, settings, cm] = await Promise.all([getMenu(), store("shop").get("texts", { type: "json" }), getBrand(), getSettings(),
+        store("coupons").get("meta", { type: "json" }) as Promise<any>]);
+      return json({ menu, texts: cleanTexts(texts), brand, settings, coupons: (cm?.on || 0) > 0 });
+    }
+    /* the customer checks a code before sending the order (the order checks it again) */
+    if (route === "POST coupon") {
+      if (!isJson) return fail("type", 415);
+      const b = await body();
+      const c = await getCoupon(normCode(b.code));
+      const sub = Number(b.subtotal);
+      let why = couponProblem(c, Number.isFinite(sub) && sub >= 0 ? sub : null);
+      const pk = phoneKey(str(b.phone, 30));
+      if (!why && c!.once && pk.length >= 8 && (await store("coupons").get(`p/${c!.code}/${pk}`))) why = "once";
+      if (why) { await wait(why === "none" ? 400 : 0); return couponFail(why, c); }
+      return json({ coupon: couponPublic(c!) });
     }
     if (route === "POST orders" && parts.length === 1) {
       if (!isJson) return fail("type", 415);
-      return await createOrder(await body());
+      return await createOrder(await body(), url.origin);
     }
     if (route === "GET track" && parts[1]) return await trackOrder(parts[1], { k: url.searchParams.get("k") }, false);
     if (route === "POST track" && parts[1]) {
       if (!isJson) return fail("type", 415);
       const b = await body();
-      return await trackOrder(parts[1], b, b.outside === true);
+      return await trackOrder(parts[1], b, b.outside === true, url.origin);
     }
     if (route === "GET me") {
       const auth = await getAuth();
@@ -513,6 +696,25 @@ export default async (req: Request, ctx: Context) => {
       await bumpPulse();
       return json({ order: o });
     }
+    /* phone notifications: where to send them, and a test message */
+    if (route === "GET ntfy") return json({ ntfy: ntfyPublic(await getNtfy()) });
+    if (route === "PUT ntfy" && !parts[1]) {
+      if (!isJson) return fail("type", 415);
+      const b = await body();
+      if (b.off === true) { await store("admin").delete("ntfy"); return json({ ntfy: null }); }
+      /* a new private topic: long and random, so nobody can guess it */
+      if (b.topic === "new") b.topic = "mm-" + randomBytes(12).toString("base64url").replace(/[^A-Za-z0-9]/g, "x");
+      const n = cleanNtfy(b, await getNtfy());
+      if (!n.topic) return fail("topic");
+      await store("admin").setJSON("ntfy", n);
+      return json({ ntfy: ntfyPublic(n) });
+    }
+    if (route === "POST ntfy" && parts[1] === "test") {
+      const n = await getNtfy();
+      if (!n?.topic) return fail("topic");
+      const ok = await ntfySend(n, { title: "تجربة ✓", message: "التنبيهات شغّالة! بيوصلك تنبيه هنا مع كل طلب جديد.", tags: ["white_check_mark"], priority: 4, click: `${url.origin}/admin.html#orders` });
+      return ok ? json({ ok: true }) : fail("send", 502);
+    }
     if (route === "PUT settings") {
       if (!isJson) return fail("type", 415);
       const set = cleanSettings(await body());
@@ -558,6 +760,41 @@ export default async (req: Request, ctx: Context) => {
         if (o && phoneKey(o.phone) === parts[1]) { o.freeUsed = true; await s.setJSON(k, o); await bumpPulse(); }
       }
       return json({ card: c });
+    }
+    if (route === "GET coupons") {
+      const all = await couponsMeta();
+      all.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      return json({ coupons: all.map(({ recent, ...c }) => c) });
+    }
+    if (route === "PUT coupons" && parts[1]) {
+      if (!isJson) return fail("type", 415);
+      const b = await body();
+      const want = cleanCoupon({ ...b, code: parts[1] });
+      if (!CODE.test(want.code)) return fail("code");
+      if (!(want.value > 0)) return fail("value");
+      const now = new Date().toISOString();
+      let saved: Coupon | null;
+      if (b.new === true) {
+        saved = { ...want, uses: 0, given: 0, recent: [], createdAt: now, updatedAt: now };
+        const w = await store("coupons").setJSON(`c/${want.code}`, saved, { onlyIfNew: true });
+        if (!w.modified) return fail("exists", 409);
+      } else {
+        saved = await updateCoupon(want.code, (c) => ({ ...c, ...want }));
+        if (!saved) return fail("missing", 404);
+      }
+      await couponsMeta();
+      const { recent, ...out } = saved;
+      return json({ coupon: out });
+    }
+    if (route === "DELETE coupons" && parts[1]) {
+      const code = normCode(parts[1]);
+      if (!CODE.test(code)) return fail("code");
+      const s = store("coupons");
+      await s.delete(`c/${code}`);
+      const { blobs } = await s.list({ prefix: `p/${code}/` });
+      await Promise.all(blobs.map((x) => s.delete(x.key)));
+      await couponsMeta();
+      return json({ ok: true });
     }
     if (route === "PUT menu") {
       if (!isJson) return fail("type", 415);

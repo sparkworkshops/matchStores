@@ -76,10 +76,17 @@ const TX={
  outside:['I’m outside 🚗','أنا برا المحل 🚗'],outsideHint:['When you arrive, tap the button and we’ll bring your order out to you ♡','لما توصل اضغط الزر ونطلع لك طلبك ♡'],
  notified:['Store notified ✓','وصل الخبر للمحل ✓'],outsideErr:['We couldn’t reach the store. Try again.','ما قدرنا نوصل للمحل. جرّب مرة ثانية.'],
  myOrder:['Your order {order}','طلبك {order}'],seeOrder:['See my order','شوف طلبي'],
- eSettings:['The shop just updated its options, please check your order again ♡','المحل غيّر الخيارات الحين، راجع طلبك مرة ثانية ♡']};
+ eSettings:['The shop just updated its options, please check your order again ♡','المحل غيّر الخيارات الحين، راجع طلبك مرة ثانية ♡'],
+ cpAsk:['Have a discount code?','عندك كود خصم؟'],cpPh:['Type the code','اكتب الكود'],cpApply:['Apply','طبّق'],cpChecking:['Checking…','جاري التحقق…'],
+ cpOn:['Code {code} applied ♡','تم تطبيق الكود {code} ♡'],cpSave:['You save {amount}','وفّرت {amount}'],cpRemove:['Remove','شيل الكود'],
+ discL:['Discount ({code})','خصم ({code})'],waDisc:['Discount ({code}): {amount}','خصم ({code}): {amount}'],
+ cpNone:['We couldn’t find this code. Check how it’s written ♡','ما لقينا هذا الكود. تأكد من كتابته ♡'],cpEnded:['Sorry, this code has ended','للأسف هذا الكود انتهى'],
+ cpUsed:['Sorry, this code has been used up','للأسف هذا الكود خلص'],cpOnce:['You already used this code before','استخدمت هذا الكود من قبل'],
+ cpMin:['This code works when your drinks add up to {n} or more','هذا الكود يشتغل لما تكون مشروباتك بـ {n} أو أكثر'],
+ cpGone:['Your discount code was removed and your total changed. Please check it and send again.','انشال كود الخصم وتغيّر المجموع. راجعه وأرسل مرة ثانية.']};
 
 /* what each {word} means, for the admin text editor */
-const TOKENS={shop:'اسم المحل',shopA:'أول جزء من اسم المحل',shopB:'باقي اسم المحل',n:'المبلغ',drink:'اسم المشروب',max:'أكثر عدد',name:'اسم العميل',from:'من الساعة',to:'إلى الساعة',count:'عدد الأختام الباقية',total:'المجموع',order:'رقم الطلب',items:'قائمة المشروبات',fee:'رسوم التوصيل'};
+const TOKENS={shop:'اسم المحل',shopA:'أول جزء من اسم المحل',shopB:'باقي اسم المحل',n:'المبلغ',drink:'اسم المشروب',max:'أكثر عدد',name:'اسم العميل',from:'من الساعة',to:'إلى الساعة',count:'عدد الأختام الباقية',total:'المجموع',order:'رقم الطلب',items:'قائمة المشروبات',fee:'رسوم التوصيل',code:'كود الخصم',amount:'مبلغ الخصم'};
 
 let OV={};/* the admin's published text changes: {key:[english, arabic]} */
 const ix=()=>LANG==='ar'?1:0;
@@ -143,7 +150,9 @@ function newOrder(drink){const d=D(drink),ss=dSizes(d);return {drink:drink||null
 const savedPay=lsGet('mm-pay',{});
 const S={step:'land',o:newOrder(null),cf:0,cart:EDIT?[]:lsGet('mm-cart',[]),edit:null,
  pay:{mode:savedPay.mode==='delivery'?'delivery':'pickup',method:PAYS.includes(savedPay.method)?savedPay.method:'cash',name:savedPay.name||'',phone:savedPay.phone||'',addr:savedPay.addr||'',notes:''},
- paid:false,last:null,sending:false,caught:lsGet('mm-caught',0),paw:lsGet('mm-paw',false),stamps:lsGet('mm-stamps',0)};
+ paid:false,last:null,sending:false,caught:lsGet('mm-caught',0),paw:lsGet('mm-paw',false),stamps:lsGet('mm-stamps',0),
+ /* the discount code the customer applied (kept with the cart), whether the code box is open, and the store has any codes at all */
+ coupon:EDIT?null:lsGet('mm-coupon',null),cpOpen:false,cpBusy:false,hasCp:false};
 const qty=id=>S.o.ad[id]||0;
 const chosen=(o=S.o)=>Object.entries(o.ad||{}).map(([k,q])=>[A(k),q]).filter(([a,q])=>a&&q>0);
 function total(o=S.o){const d=D(o.drink);if(!d)return 0;let t=+d.price+ +(SZ(o.size)?.add||0)+ +(MK(o.milk)?.add||0);for(const[a,q]of chosen(o))t+=a.price*q;return t}
@@ -158,7 +167,12 @@ function fixCart(){S.cart=(Array.isArray(S.cart)?S.cart:[]).filter(c=>c&&D(c.dri
 const snap=cart=>cart.map(c=>{const d=D(c.drink),s=SZ(c.size),m=MK(c.milk);return {drink:d.id,name:d.name,ar:d.ar,img:d.img,color:d.color,under:d.under||'',size:{name:s.name,ar:s.ar},milk:m?{name:m.name,ar:m.ar}:null,addons:chosen(c).map(([a,q])=>({name:a.name,ar:a.ar,q,price:a.price})),qty:c.qty,unit:total(c),line:total(c)*c.qty}});
 /* delivery orders get their fee as its own line under the drinks */
 function waItems(o,i){const n=x=>(i&&x.ar)?x.ar:x.name;const l=o.items.map(it=>{const p=[n(it.size)];if(it.milk)p.push(n(it.milk));(it.addons||[]).forEach(a=>p.push(n(a)+(a.q>1?' ×'+a.q:'')));return `• ${it.qty}× ${n(it)} (${p.join(i?'، ':', ')})`});
+ if(+o.discount>0)l.push('• '+fill(rawL('waDisc',i),{code:cpCode(o),amount:moneyL(o.discount,i)},String));
  if(+o.fee>0)l.push('• '+fill(rawL('waFee',i),{fee:moneyL(o.fee,i)},String));return l.join('\n')}
+/* an order's discount code: the server keeps {code,…}, the shop keeps just the code */
+const cpCode=o=>typeof o.coupon==='string'?o.coupon:(o.coupon&&o.coupon.code)||'';
+/* the same sum the server does: a % or an amount off the drinks, never more than the drinks */
+const discOf=(c,sub)=>{if(!c||(+c.min&&sub<+c.min))return 0;const d=c.kind==='amt'?+c.value:sub*(+c.value)/100;return Math.round(Math.min(sub,d)*100)/100};
 function waText(k,o){const i=o.lang==='en'?0:1;return fill(rawL(k,i),{name:o.name,order:orderNo(o.no),items:waItems(o,i),total:moneyL(o.total,i),fee:moneyL(o.fee||0,i)},String)}
 
 /* ================= drawings ================= */
@@ -247,7 +261,7 @@ const imgOf=(d,i=STORE.drinks.indexOf(d))=>d.img||drinkArt(d,i);
 const BAG=`<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h18l-2 16H9z" fill="#ffd3e0" stroke="${L}" stroke-width="2.5" stroke-linejoin="round"/><path d="M12 11V9a4 4 0 0 1 8 0v2" fill="none" stroke="${L}" stroke-width="2.5" stroke-linecap="round"/><path d="M13 19q3 3 6 0" fill="none" stroke="${L}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 
 /* the admin page borrows these */
-window.MM={TX,TOKENS,esc,drinkArt,icon,cupSVG,catSVG,LOGO,logoHTML,pawSVG,waText,moneyL,numStr,orderNo,bName,halves,DEF_NAME,
+window.MM={TX,TOKENS,esc,drinkArt,icon,cupSVG,catSVG,LOGO,logoHTML,pawSVG,waText,moneyL,numStr,orderNo,bName,halves,DEF_NAME,cpCode,
  setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},setBrand,getBrand:()=>BRAND,rawL,lum,onC,setSettings,setLogoSize,mapLinks,mapEmbed,PAYS};
 if(LIB){/* library only */}else{
 
@@ -268,7 +282,17 @@ const recentPickup=()=>{if(EDIT)return null;const L=lsGet(LASTK,null);return L&&
 const outCool=L=>!!(L&&L.outAt&&Date.now()-L.outAt<OUT_COOL);
 const outBtn=L=>{const c=outCool(L);return `<button class="cta outb ${c?'sent':''}" data-act="outside" ${c?'disabled':''}${X(c?'notified':'outside')}>${c?t('notified'):t('outside')}</button>`};
 const payFee=()=>S.pay.mode==='delivery'&&(EDIT||SET.delivery)?(+SET.fee||0):0;
-const payTotal=()=>cartTotal()+payFee();
+const payDisc=()=>discOf(S.coupon,cartTotal());
+const payTotal=()=>cartTotal()-payDisc()+payFee();
+const saveCp=()=>{if(EDIT)return;if(S.coupon)lsSet('mm-coupon',S.coupon);else try{localStorage.removeItem('mm-coupon')}catch(e){}};
+const CPMSG={none:'cpNone',off:'cpEnded',ended:'cpEnded',used:'cpUsed',once:'cpOnce',min:'cpMin'};
+const cpMsg=(why,min)=>CPMSG[why]?tp(CPMSG[why],{n:moneyL(min||0,ix())}):tp('eServer');
+/* the discount code box on the order page */
+function cpBox(){const c=S.coupon,sub=cartTotal();
+ if(c){const d=discOf(c,sub);return `<div class="cpon"><span class="cpi" aria-hidden="true">🎟️</span><span><b${X('cpOn')}>${t('cpOn',{code:c.code})}</b>${d>0?`<small${X('cpSave')}>${t('cpSave',{amount:moneyL(d,ix())},true)}</small>`:`<small class="cpwarn">${esc(cpMsg('min',c.min))}</small>`}</span><button type="button" class="lnk mut" data-act="cpoff"${X('cpRemove')}>${t('cpRemove')}</button></div>`}
+ if(!S.hasCp&&!EDIT)return '';
+ if(!S.cpOpen&&!EDIT)return `<button type="button" class="lnk cpask" data-act="cpopen"${X('cpAsk')}>🎟️ ${t('cpAsk')}</button>`;
+ return `<div class="cpbox"><label><span${X('cpAsk')}>${t('cpAsk')}</span><span class="cprow"><input id="cpin" dir="ltr" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" enterkeyhint="go" placeholder="${t('cpPh')}"${XP('cpPh')}><button type="button" class="ghost" data-act="cpapply" id="cpgo"${X('cpApply')}>${t('cpApply')}</button></span></label><p class="err" id="cperr" role="alert"></p></div>`}
 function locCard(){const l=SET.loc;if(!l)return '';const m=mapLinks(l);
  return `<div class="where"><h3${X('whereH')}>${t('whereH')}</h3><a class="wmap" href="${esc(m.g)}" target="_blank" rel="noopener" aria-label="${esc(tp('openG'))}">${mapEmbed(l)}</a>${l.note?`<p class="wnote">${esc(l.note)}</p>`:''}<div class="mapbtns"><a class="ghost" href="${esc(m.g)}" target="_blank" rel="noopener"${X('openG')}>📍 ${t('openG')}</a><a class="ghost" href="${esc(m.a)}" target="_blank" rel="noopener"${X('openA')}>🧭 ${t('openA')}</a></div></div>`}
 /* bottom bar: k = label text key */
@@ -351,14 +375,14 @@ ${c.length?`<div class="cartl">${c.map((it,i)=>{const d=D(it.drink);return `<div
 <div class="addmore"><button class="ghost" data-act="more"${X('addAnother')}>${t('addAnother')}</button></div>
 ${bbar({k:'goCheckout',act:'topay',small:'yourTotal',amount:cartTotal(),flat:true})}`:cartEmptyHTML()}`}
 
-/* fee: the delivery fee, shown as its own line above the total */
-function receiptHTML(items,tot,stamped,fee=0){items=items.filter(c=>D(c.drink));return `<div class="slot" data-l="${t('receipt')}"${X('receipt')}></div><div class="receipt" id="receipt"><h3${X('brand')}>${t('brand')}</h3><div class="rcs">${items.slice(0,4).map(c=>`<div class="rc">${cupSVG(c)}</div>`).join('')}</div><ul class="rl">${items.map(c=>`<li><span><span class="q">${c.qty}×</span> ${esc(nm(D(c.drink)))}<small>${optsLine(c)}</small></span><b>${money(total(c)*c.qty)}</b></li>`).join('')}</ul>${+fee>0?`<div class="rsub"><span${X('subtotal')}>${t('subtotal')}</span><span>${money(tot-fee)}</span></div><div class="rsub"><span${X('feeL')}>${t('feeL')}</span><span>${money(fee)}</span></div>`:''}<div class="rtot"><span${X('total')}>${t('total')}</span><span>${money(tot)}</span></div>${stamped?`<div class="paid"${X('paid')}>${t('paid')}</div>`:''}</div>`}
+/* fee: the delivery fee, disc: the discount from a code; each shown as its own line above the total */
+function receiptHTML(items,tot,stamped,fee=0,disc=0,code=''){items=items.filter(c=>D(c.drink));return `<div class="slot" data-l="${t('receipt')}"${X('receipt')}></div><div class="receipt" id="receipt"><h3${X('brand')}>${t('brand')}</h3><div class="rcs">${items.slice(0,4).map(c=>`<div class="rc">${cupSVG(c)}</div>`).join('')}</div><ul class="rl">${items.map(c=>`<li><span><span class="q">${c.qty}×</span> ${esc(nm(D(c.drink)))}<small>${optsLine(c)}</small></span><b>${money(total(c)*c.qty)}</b></li>`).join('')}</ul>${+fee>0||+disc>0?`<div class="rsub"><span${X('subtotal')}>${t('subtotal')}</span><span>${money(tot-fee+ +disc)}</span></div>`:''}${+disc>0?`<div class="rsub rdisc"><span${X('discL')}>${t('discL',{code})}</span><span>${money(disc)}</span></div>`:''}${+fee>0?`<div class="rsub"><span${X('feeL')}>${t('feeL')}</span><span>${money(fee)}</span></div>`:''}<div class="rtot"><span${X('total')}>${t('total')}</span><span>${money(tot)}</span></div>${stamped?`<div class="paid"${X('paid')}>${t('paid')}</div>`:''}</div>`}
 function payView(){const P=S.pay,MODES=EDIT?['pickup','delivery']:modesOn(),METHODS=EDIT?PAYS:paysOn();
- if(S.paid&&S.last){const o=S.last,pick=(o.mode||'pickup')==='pickup';return `${receiptHTML(o.items,o.total,true,o.fee||0)}<div class="cheer"><div>${catSVG('happy')}</div><div class="bubble"${X('thx')}>${t('thx',{name:o.name||tp('friend')},true)}</div></div>
+ if(S.paid&&S.last){const o=S.last,pick=(o.mode||'pickup')==='pickup';return `${receiptHTML(o.items,o.total,true,o.fee||0,o.discount||0,cpCode(o))}<div class="cheer"><div>${catSVG('happy')}</div><div class="bubble"${X('thx')}>${t('thx',{name:o.name||tp('friend')},true)}</div></div>
 <div class="thanks"><h2 class="bub-p"${X('thanksH')}>${t('thanksH')}</h2><div class="ticket"><small${X('yourOrder')}>${t('yourOrder')}</small><b>${esc(orderNo(o.no))}</b><small${X('etaReady')}>${t('etaReady',{from:clock(new Date(S.ready[0])),to:clock(new Date(S.ready[1]))})}</small></div>
 ${pick&&(o.id||EDIT)?`<div class="outbox"><p${X('outsideHint')}>${t('outsideHint')}</p>${outBtn(o)}<p class="err" id="outerr" role="alert"></p></div>`:''}
 <p style="font-weight:900;margin:8px 0 2px"${X('stampCard')}>${t('stampCard')}</p><div class="scard">${Array.from({length:8},(_,i)=>`<i class="${i<S.stamps?'st':''}">${i<S.stamps?pawSVG('#ff4f86'):''}</i>`).join('')}</div><p class="small"${X(S.stamps>=8?'cardFull':'more')}>${S.stamps>=8?t('cardFull'):t('more',{count:8-S.stamps})}</p><button class="cta g" data-act="again"${X('again')}>${t('again')}</button></div>${pick?locCard():''}${EDIT?`<span${X('friend')} class="small" style="display:block;text-align:center;margin-top:8px;opacity:.7">${t('friend')}</span>`:''}<div style="height:30px"></div>`}
- return `${prog()}${receiptHTML(S.cart,payTotal(),false,payFee())}
+ return `${prog()}${receiptHTML(S.cart,payTotal(),false,payFee(),payDisc(),S.coupon?.code||'')}
 <div class="cheer"><div>${catSVG('hi')}</div><div class="bubble" id="catsay"${X('almost')}>${t('almost')}</div></div>
 <form class="form" data-form="pay" novalidate><h2${X('howWant')}>${t('howWant')}</h2>
 ${MODES.length>1?`<div class="switch ${P.mode==='delivery'?'r':''}" role="group"><span class="knob"></span>${MODES.map(k=>`<button type="button" class="${P.mode===k?'on':''}" aria-pressed="${P.mode===k}" data-act="mode" data-a="${k}"${X(k)}>${t(k)}</button>`).join('')}</div>`
@@ -367,6 +391,7 @@ ${MODES.length>1?`<div class="switch ${P.mode==='delivery'?'r':''}" role="group"
 <label><span${X('phone')}>${t('phone')}</span><input data-pf="phone" value="${esc(P.phone)}" inputmode="tel" autocomplete="tel" placeholder="${t('phonePh')}"${XP('phonePh')}></label>
 ${P.mode==='delivery'?`<label><span${X('addr')}>${t('addr')}</span><input data-pf="addr" value="${esc(P.addr)}" autocomplete="street-address" placeholder="${t('addrPh')}"${XP('addrPh')}></label>${payFee()>0?`<p class="feen"${X('feeNote')}>🛵 ${t('feeNote',{fee:moneyL(payFee(),ix())},true)}</p>`:''}`:`<p class="small" style="margin-top:-2px"${X('pickNote')}>${t('pickNote')}</p>${locCard()}`}
 <label><span${X('notes')}>${t('notes')}</span><textarea data-pf="notes" rows="3" maxlength="500" placeholder="${t('notesPh')}"${XP('notesPh')}>${esc(P.notes)}</textarea></label>
+${cpBox()}
 <h2 style="font-size:18px;margin:6px 0 10px"${X('payWith')}>${t('payWith')}</h2>
 <div class="meth ${METHODS.length===1?'one':''}" role="group">${METHODS.map(k=>`<button type="button" class="${P.method===k?'on':''}" aria-pressed="${P.method===k}" data-act="method" data-a="${k}"${X(k)}>${t(k)}</button>`).join('')}</div>
 ${P.method==='transfer'&&!EDIT?`<div class="tapbox tr"><span><b${X('transferNote')}>${t('transferNote')}</b>${SET.transfer?`<span class="trinfo">${esc(SET.transfer)}</span>`:''}</span></div>`
@@ -398,6 +423,9 @@ function galleryView(){const card=(cap,body)=>`<div class="gc"><h3>${cap}</h3>${
  ${card('رسوم التوصيل (تطلع لطلبات التوصيل لما يكون لها رسوم)',`<p class="feen"${X('feeNote')}>🛵 ${t('feeNote',{fee:moneyL(+SET.fee||10,ix())},true)}</p><div class="rsub"><span${X('subtotal')}>${t('subtotal')}</span><span>${money(52)}</span></div><div class="rsub"><span${X('feeL')}>${t('feeL')}</span><span>${money(+SET.fee||10)}</span></div>`)}
  ${card('الدفع بالتحويل البنكي',`<div class="tapbox tr" style="margin:0"><span><b${X('transferNote')}>${t('transferNote')}</b><span class="trinfo">${esc(SET.transfer||'…')}</span></span></div>`)}
  ${card('موقع المحل لطلبات الاستلام',`<div class="where" style="margin:0"><h3${X('whereH')}>${t('whereH')}</h3><div class="mapbtns"><span class="ghost"${X('openG')}>📍 ${t('openG')}</span><span class="ghost"${X('openA')}>🧭 ${t('openA')}</span></div></div>`)}
+ ${card('كود الخصم (يطلع في صفحة الطلب لما يكون عندك كوبونات شغّالة)',(()=>{const keep=S.coupon,ex={code:'MATCHA10',kind:'pct',value:10,min:0};S.coupon=ex;const on=cpBox();S.coupon=keep;
+  return `<button type="button" class="lnk cpask"${X('cpAsk')}>🎟️ ${t('cpAsk')}</button><button type="button" class="ghost" style="margin:6px 0 10px"${X('cpChecking')}>${t('cpChecking')}</button>${on}<div class="rsub rdisc" style="margin-top:10px"><span${X('discL')}>${t('discL',{code:ex.code})}</span><span>${money(5)}</span></div>`})())}
+ ${card('لما كود الخصم ما يشتغل',['cpNone','cpEnded','cpUsed','cpOnce'].map(k=>`<p class="err"${X(k)}>${t(k)}</p>`).join('')+`<p class="err"${X('cpMin')}>${t('cpMin',{n:moneyL(50,ix())})}</p><p class="oops" style="margin:8px 0 0"${X('cpGone')}>${t('cpGone')}</p>`)}
  ${card('لما المحل يغيّر طرق الاستلام أو الدفع والعميل في صفحة الطلب',`<p class="err"${X('eSettings')}>${t('eSettings')}</p>`)}
  ${card('كلمات ما تنشاف، يقرأها الجوال بصوت عالي للمكفوفين',`<div class="row">${['home','back','prev','next','cartLabel','langLabel','caught','catTap'].map(k=>`<span class="chip"${X(k)}>${t(k)}</span>`).join('')}</div>`)}
  </div>`}
@@ -405,6 +433,7 @@ function waView(){const o={no:'1234',name:LANG==='ar'?'سارة':'Sara',lang:LAN
  return `<div class="mhead"><h1 class="bub-g">رسائل واتساب</h1></div><div class="gal">
  <div class="gc"><h3>زر «واتساب» في صفحة الطلبات (مثال بطلب تجريبي)</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waOrder')}>${esc(waText('waOrder',o))}</div></div></div>
  <div class="gc"><h3>نفس الرسالة لطلب توصيل: سطر رسوم التوصيل ينضاف تحت المشروبات</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"><span${X('waFee')}>${esc(waText('waOrder',od))}</span></div></div></div>
+ <div class="gc"><h3>طلب فيه كود خصم: سطر الخصم ينضاف تحت المشروبات</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"><span${X('waDisc')}>${esc(waText('waOrder',Object.assign({},o,{coupon:'MATCHA10',discount:5,total:o.total-5})))}</span></div></div></div>
  <div class="gc"><h3>طلب استلام: زر «تم التجهيز» يرسل هذي الرسالة</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waReady')}>${esc(waText('waReady',o))}</div></div></div>
  <div class="gc"><h3>طلب توصيل: زر «طلع للتوصيل» يرسل هذي الرسالة</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waWay')}>${esc(waText('waWay',o))}</div></div></div>
  <p class="small" style="text-align:center">العميل يستلم الرسالة باللغة اللي طلب فيها</p></div>`}
@@ -494,16 +523,18 @@ async function sendOrder(){if(S.sending||S.paid)return false;S.sending=true;lock
  const items=S.cart.map(c=>({drink:c.drink,size:c.size,milk:c.milk,ad:c.ad,qty:c.qty})),sig=JSON.stringify([items,P.mode]);
  /* same drinks as an unfinished try: it's the same order, so it keeps the same id */
  let pend=lsGet(PENDK,null);if(!pend||pend.sig!==sig||Date.now()-(+pend.at||0)>6*3600e3){pend={cid:newCid(),sig,at:Date.now()};lsSet(PENDK,pend)}
- const body={cid:pend.cid,at:pend.at,name:P.name,phone:P.phone,mode:P.mode,addr:P.addr,notes:P.notes,method:P.method,lang:LANG,items};
+ const body={cid:pend.cid,at:pend.at,name:P.name,phone:P.phone,mode:P.mode,addr:P.addr,notes:P.notes,method:P.method,lang:LANG,items,coupon:payDisc()>0?S.coupon.code:''};
  const {r,j}=await postOrder(body);
  if(!r||!r.ok){S.sending=false;
+  /* the code stopped working since it was applied: take it off, show the new total, and let the customer decide */
+  if(r&&j.error==='coupon'){S.coupon=null;saveCp();render(true);const p=document.createElement('p');p.className='oops';p.textContent=cpMsg(j.why,j.min)+' '+tp('cpGone');$('main')?.prepend(p);return false}
   if(r&&(j.error==='menu'||j.error==='items')){await loadShop().catch(()=>{});fixCart();S.step='cart';render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eMenu');$('main')?.prepend(p);return false}
   if(r&&(j.error==='mode'||j.error==='method')){await loadShop().catch(()=>{});render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eSettings');$('main')?.prepend(p);return false}
   const map=r&&{name:['name','eName'],phone:['phone','ePhone'],addr:['addr','eAddr']}[j.error];showErr(map?[map[0],tp(map[1])]:['',tp('eServer')]);return false}
  try{localStorage.removeItem(PENDK)}catch(e){}
  S.ready=readyWin();
- S.last={id:j.id,cid:pend.cid,no:j.no,items:clone(S.cart),total:j.total,fee:+j.fee||0,mode:j.mode||P.mode,name:P.name,at:Date.now(),ready:S.ready};lsSet(LASTK,S.last);
- S.cart=[];saveCart();S.pay.notes='';
+ S.last={id:j.id,cid:pend.cid,no:j.no,items:clone(S.cart),total:j.total,fee:+j.fee||0,discount:+j.discount||0,coupon:j.coupon||'',mode:j.mode||P.mode,name:P.name,at:Date.now(),ready:S.ready};lsSet(LASTK,S.last);
+ S.cart=[];saveCart();S.pay.notes='';S.coupon=null;S.cpOpen=false;saveCp();
  S.paid=true;S.stamps=typeof j.stamps==='number'?j.stamps:Math.min(8,S.stamps+1);lsSet('mm-stamps',S.stamps);S.sending=false;render(true);setTimeout(()=>rain('mix',60),200);return true}
 /* the stamp count the shop has for this order's phone (the admin can change it) */
 async function refreshTrack(L){if(!L||!L.id||!L.cid)return;try{const r=await fetch(`/api/track/${encodeURIComponent(L.id)}?k=${encodeURIComponent(L.cid)}`,{cache:'no-store'});if(!r.ok)return;const j=await r.json();
@@ -562,6 +593,15 @@ const ACT={
  edititem:a=>{const c=S.cart[+a];if(!c)return;S.edit=+a;S.o=clone(c);S.step='machine';render(true)},
  topay:()=>{if(!S.cart.length)return;S.step='pay';S.paid=false;render(true)},
  mode:a=>{S.pay.mode=a;keepPay();render()},
+ /* discount codes: open the box, check the code with the shop, take it off */
+ cpopen:()=>{S.cpOpen=true;keepRender();setTimeout(()=>$('#cpin')?.focus(),30)},
+ cpoff:()=>{S.coupon=null;S.cpOpen=true;saveCp();keepRender()},
+ cpapply:async()=>{const inp=$('#cpin'),er=$('#cperr'),go=$('#cpgo');if(!inp||S.cpBusy)return;const code=inp.value.trim();if(!code){inp.focus();return}
+  S.cpBusy=true;go.disabled=true;go.textContent=tp('cpChecking');er.textContent='';let j={},r=null;
+  try{r=await fetch('/api/coupon',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,subtotal:cartTotal(),phone:S.pay.phone})});j=await r.json().catch(()=>({}))}catch(e){}
+  S.cpBusy=false;
+  if(r&&r.ok&&j.coupon){S.coupon=j.coupon;saveCp();keepRender();const b=$('.cpon');if(b){const q=b.getBoundingClientRect();burst(q.left+30,q.top+20,8,'h')}return}
+  if(!go.isConnected)return;go.disabled=false;go.textContent=tp('cpApply');er.textContent=r&&j.error==='coupon'?cpMsg(j.why,j.min):tp('eServer');inp.focus()},
  method:a=>{S.pay.method=a;keepPay();render()},
  again:()=>{S.paid=false;S.o=newOrder(null);S.step='drink';render(true)},
  /* the pickup order from earlier, opened from the bar on the home page */
@@ -581,11 +621,16 @@ const ACT={
  hundred:(a,el)=>{h100++;const t=$('#h100');if(h100%3===0){const was=t.textContent;t.textContent='1000%';setTimeout(()=>t.textContent=was,2500)}ACT.spin(a,el)},
  tickle:(a,el)=>{bump();const r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height*.6,5,'h')},
  dango:(a,el)=>{if(el.style.opacity==='0')return;el.style.opacity='0';el.style.transform='scale(0)';dangoLeft--;const r=el.getBoundingClientRect();burst(r.left+20,r.top+20,5,'s');if(dangoLeft===0){setTimeout(()=>{$$('.dango circle').forEach(c=>{c.style.opacity='';c.style.transform=''});dangoLeft=3},1500)}}};
+/* draw again without jumping, keeping what the customer typed (it's already saved in S.pay) */
+const keepRender=()=>{const y=scrollY;render();scrollTo(0,y)};
 const keepPay=()=>{const P=S.pay;lsSet('mm-pay',{name:P.name,phone:P.phone,addr:P.addr,mode:P.mode,method:P.method})};
 
 /* ================= data ================= */
 async function loadShop(){const r=await fetch('/api/shop',{cache:'no-store'});if(!r.ok)throw new Error('shop '+r.status);const j=await r.json();if(!EDIT)lsSet('mm-shop',j);return useShop(j)}
-function useShop(j){const before=JSON.stringify([STORE,OV,BRAND,SET]);STORE=j.menu;if(!EDIT)OV=j.texts||{};setBrand(j.brand);setSettings(j.settings);fixCart();fixPay();if(S.o.drink&&!D(S.o.drink))S.o=newOrder(null);return before!==JSON.stringify([STORE,OV,BRAND,SET])}
+function useShop(j){const before=JSON.stringify([STORE,OV,BRAND,SET,S.hasCp]);STORE=j.menu;if(!EDIT)OV=j.texts||{};setBrand(j.brand);setSettings(j.settings);
+ /* the code box only shows when the store has codes switched on */
+ S.hasCp=!!j.coupons;if(!S.hasCp&&S.coupon){S.coupon=null;saveCp()}
+ fixCart();fixPay();if(S.o.drink&&!D(S.o.drink))S.o=newOrder(null);return before!==JSON.stringify([STORE,OV,BRAND,SET,S.hasCp])}
 /* the customer only gets the ways to receive and pay that the store has turned on */
 function fixPay(){if(EDIT)return;const m=modesOn(),p=paysOn();if(!m.includes(S.pay.mode))S.pay.mode=m[0];if(!p.includes(S.pay.method))S.pay.method=p[0]}
 
@@ -617,7 +662,7 @@ document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const f=ACT[b.dataset.act];if(f){e.preventDefault();f(b.dataset.a,b)}});
 document.addEventListener('input',e=>{const tg=e.target;if(tg.dataset.pf&&tg.dataset.pf in S.pay){S.pay[tg.dataset.pf]=tg.value;if(tg.dataset.pf!=='notes')keepPay()}});
 document.addEventListener('submit',e=>e.preventDefault());
-document.addEventListener('keydown',e=>{if(S.step==='drink'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||'')){if(e.key==='ArrowLeft')cfSet(Math.round(S.cf)-1);if(e.key==='ArrowRight')cfSet(Math.round(S.cf)+1)}});
+document.addEventListener('keydown',e=>{if(e.target.id==='cpin'&&e.key==='Enter'){e.preventDefault();ACT.cpapply();return}if(S.step==='drink'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||'')){if(e.key==='ArrowLeft')cfSet(Math.round(S.cf)-1);if(e.key==='ArrowRight')cfSet(Math.round(S.cf)+1)}});
 addEventListener('resize',()=>layoutCF());
 /* the dotted wall beside the phone column on big screens */
 if(!EDIT)$('#wall').innerHTML=[[4,10,90,'b'],[12,62,70,'r'],[6,80,110,'c'],[86,8,80,'d'],[90,46,90,'b'],[82,74,70,'h'],[16,34,50,'s'],[78,30,46,'s'],[22,88,60,'h'],[92,90,60,'r']].map(([x,y,s,k],i)=>`<button class="stk" data-act="${k==='b'||k==='h'?'pop':'spin'}" style="left:${x}%;top:${y}%;width:${s}px;height:${s}px;transform:rotate(${(i*23)%40-20}deg)" aria-hidden="true" tabindex="-1">${k==='b'?strawSVG():k==='r'?rollSVG():k==='c'?catSVG('happy'):k==='d'?daifukuSVG():k==='h'?heartSVG():sparkSVG('#fff6b0')}</button>`).join('');

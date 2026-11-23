@@ -13,6 +13,13 @@
       "runtimeArgs": ["/c", "set APPDATA=X:/Users/trasru/matcha-store/.netlify/appdata&& npx netlify dev --offline --port 8889 --staticServerPort 4011 --functions-port 34571"],
       "port": 8889,
       "autoPort": false
+    },
+    {
+      "name": "matcha-dev-3",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set APPDATA=X:/Users/trasru/matcha-store/.netlify/appdata&& npx netlify dev --offline --port 8890 --staticServerPort 4012 --functions-port 34572"],
+      "port": 8890,
+      "autoPort": false
     }
   ]
 }

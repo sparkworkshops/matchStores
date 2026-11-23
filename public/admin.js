@@ -7,7 +7,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const money=n=>M.numStr(n)+' ر.س';
 const root=$('#root');
 const A={me:null,menu:null,texts:{},orders:null,seen:null,fresh:new Set(),filter:'all',olimit:30,page:'orders',dtab:'drinks',work:null,dirty:false,brand:{},order:null,orderDirty:false,
- v:'',fullAt:0,loading:false,again:false,mutAt:0,outSeen:new Map(),set:null,sw:null,sdirty:false,cards:null,q:'',climit:60};
+ v:'',fullAt:0,loading:false,again:false,mutAt:0,outSeen:new Map(),set:null,sw:null,sdirty:false,cards:null,coupons:null,q:'',climit:60};
 
 const I=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const ICO={orders:I('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>'),cup:I('<path d="M5 8h14l-1.5 12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/><path d="M4 8h16M13 8l2-6"/>'),
@@ -16,6 +16,7 @@ const ICO={orders:I('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 1
  help:I('<circle cx="12" cy="12" r="9.5"/><path d="M9.2 9.4a2.9 2.9 0 1 1 4 2.6c-.8.4-1.2 1-1.2 1.9v.3"/><path d="M12 17.3v.2"/>'),
  sort:I('<path d="M8 4v16M4.5 7.5L8 4l3.5 3.5M16 20V4M12.5 16.5L16 20l3.5-3.5"/>'),
  up:I('<path d="M6 15l6-6 6 6"/>'),down:I('<path d="M6 9l6 6 6-6"/>'),
+ ticket:I('<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M9.5 14.5l5-5"/><circle cx="9.7" cy="9.7" r=".6"/><circle cx="14.3" cy="14.3" r=".6"/>'),
  stamp:I('<circle cx="12" cy="12" r="9.5"/><path d="M12 7.2l1.5 3 3.3.4-2.4 2.3.6 3.3-3-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.4z"/>'),
  gear:I('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')};
 
@@ -55,14 +56,14 @@ ${setup?'<label class="fld">اكتب كلمة المرور مرة ثانية<inp
 
 /* ---------- shell + pages ---------- */
 /* [page, name, icon, short name for the phone's bottom bar] */
-const NAV=[['orders','الطلبات',ICO.orders],['drinks','المشروبات',ICO.cup],['stamps','الأختام',ICO.stamp],['settings','الإعدادات',ICO.gear],['texts','نصوص الموقع',ICO.text,'النصوص'],['account','الحساب',ICO.user]];
+const NAV=[['orders','الطلبات',ICO.orders],['drinks','المشروبات',ICO.cup,'مشروبات'],['stamps','الأختام',ICO.stamp],['coupons','الكوبونات',ICO.ticket,'الخصم'],['settings','الإعدادات',ICO.gear],['texts','نصوص الموقع',ICO.text,'النصوص'],['account','الحساب',ICO.user]];
 const navLinks=bottom=>NAV.map(([k,n,ic,sh])=>`<a href="#${k}" data-nav="${k}">${ic}<span>${bottom&&sh?sh:n}</span>${k==='orders'?'<span class="bd" data-bd></span>':''}</a>`).join('');
 function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.logoHTML()}<b>${esc(M.bName(1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" href="/" target="_blank" rel="noopener">افتح المتجر ↗</a></div><div id="outbar"></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks(true)}</nav>`}
 const page=()=>$('#page');
 function route(){const h=location.hash.slice(1);A.page=NAV.some(n=>n[0]===h)?h:'orders';
  $$('[data-nav]').forEach(a=>{const on=a.dataset.nav===A.page;a.classList.toggle('on',on);on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current')});
  if(A.page!=='texts')leaveEditor();
- ({orders:renderOrders,drinks:renderDrinks,stamps:renderStamps,settings:renderSettings,texts:renderTexts,account:renderAccount})[A.page]();scrollTo(0,0)}
+ ({orders:renderOrders,drinks:renderDrinks,stamps:renderStamps,coupons:renderCoupons,settings:renderSettings,texts:renderTexts,account:renderAccount})[A.page]();scrollTo(0,0)}
 addEventListener('hashchange',()=>{if(A.me&&A.me.admin)route()});
 async function start(){const j=await api('shop');A.menu=j.menu;A.texts=j.texts||{};A.brand=j.brand||{};A.set=j.settings||null;M.setTexts(A.texts);M.setMenu(A.menu);M.setBrand(A.brand);M.setSettings(A.set);shell();route();loadOrders(true,true);startPoll();
  /* a new store: ask for its name and logo, then show how to add the first drink */
@@ -133,7 +134,7 @@ const an=x=>x?(x.ar||x.name):'';
 const PAYL={cash:'كاش',card:'بطاقة / مدى',transfer:'تحويل بنكي',applepay:'Apple Pay'};
 /* the same customer key the server uses for stamp cards */
 const pkey=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.length===10&&d.startsWith('05'))d='966'+d.slice(1);else if(d.length===9&&d.startsWith('5'))d='966'+d;return d.slice(0,20)};
-function orderCard(o){const done=o.status==='done',dl=o.mode==='delivery',wo=waURL(o,'waOrder'),wr=waURL(o,dl?'waWay':'waReady'),out=isOut(o),fee=+o.fee||0;
+function orderCard(o){const done=o.status==='done',dl=o.mode==='delivery',wo=waURL(o,'waOrder'),wr=waURL(o,dl?'waWay':'waReady'),out=isOut(o),fee=+o.fee||0,disc=+o.discount||0;
  /* pickup: "ready" sends "your order is ready"; delivery: "out for delivery" sends "your order is on the way" */
  const doneL=dl?'طلع للتوصيل':'تم التجهيز';
  return `<article class="ocard ${done?'done':''} ${A.fresh.has(o.id)?'fresh':''} ${out?'outside':''}" id="o-${esc(o.id)}" aria-label="طلب ${esc(o.no)}">
@@ -145,7 +146,7 @@ function orderCard(o){const done=o.status==='done',dl=o.mode==='delivery',wo=waU
  ${(+o.cardBefore||0)>=8?(o.freeUsed?'<div class="ofree used">🎁 استخدم مشروبه المجاني في هذا الطلب ✓</div>':`<div class="ofree"><span>🎁 بطاقة أختامه كاملة: له مشروب مجاني</span><button class="btn" data-a="redeem" data-id="${o.id}">استخدم المشروب المجاني</button></div>`):''}
  <ul class="oitems">${o.items.map(it=>`<li><img src="${it.img||M.drinkArt({id:it.drink,color:it.color,under:it.under||''},0)}" alt=""><div><b><span class="q">×${it.qty}</span>${esc(an(it))}</b><span class="sz">${esc(an(it.size))}${it.milk?' · '+esc(an(it.milk)):''}</span>${it.addons&&it.addons.length?`<span class="ads">${it.addons.map(a=>`<span>${esc(an(a))}${a.q>1?' ×'+a.q:''}</span>`).join('')}</span>`:''}</div><span class="lp">${money(it.line)}</span></li>`).join('')}</ul>
  ${o.notes?`<div class="onote"><small>ملاحظات العميل</small>${esc(o.notes)}</div>`:''}
- ${fee>0?`<div class="ofee"><span>المشروبات <b>${money(o.subtotal??(o.total-fee))}</b></span><span>رسوم التوصيل <b>${money(fee)}</b></span></div>`:''}
+ ${fee>0||disc>0?`<div class="ofee"><span>المشروبات <b>${money(o.subtotal??(o.total-fee+disc))}</b></span>${disc>0?`<span class="odisc">🎟️ خصم <bdi dir="ltr">${esc(M.cpCode(o))}</bdi> <b>${money(disc)}</b></span>`:''}${fee>0?`<span>رسوم التوصيل <b>${money(fee)}</b></span>`:''}</div>`:''}
  <div class="ofoot"><span class="otot">المجموع <b>${money(o.total)}</b></span><button class="pay ${o.paid?'y':''}" data-a="paid" data-id="${o.id}">${o.paid?'مدفوع ✓':'لم يُدفع بعد'}<small>${o.paid?'اضغط إذا ما دفع':'اضغط إذا دفع'}</small></button><span class="ometh">طريقة الدفع: ${PAYL[o.method]||'كاش'}${o.method==='transfer'?'':dl?'، عند التوصيل':'، عند الاستلام'}</span></div>
  <div class="oact">${wo?`<a class="btn wa" href="${wo}" target="_blank" rel="noopener">${ICO.wa}واتساب</a>`:'<span class="btn wa" aria-disabled="true">رقم غير صالح</span>'}
  ${done?`<span class="btn g" aria-disabled="true">${ICO.check}${doneL}</span><button class="lnk mut oundo" data-a="undo" data-id="${o.id}">إرجاعه لطلب جديد</button>`:wr?`<a class="btn g" href="${wr}" target="_blank" rel="noopener" data-a="done" data-id="${o.id}">${ICO.check}${doneL}</a>`:`<button class="btn g" data-a="done" data-id="${o.id}">${ICO.check}${doneL}</button>`}</div></article>`}
@@ -649,6 +650,110 @@ function stampSteps(){return [
  {el:()=>$('.lstats'),title:'كم مرة أخذ مشروب مجاني',body:'<p>«كسب» يعني كم مرة كمّل البطاقة، و«استخدمه» كم مرة أخذ المشروب المجاني.</p>'},
  {el:()=>$('.lact'),title:'المشروب المجاني والتصفير',body:'<p>لما تكمل البطاقة يطلع زر <b>«استخدم المشروب المجاني»</b>. اضغطه لما تعطيه المشروب، والبطاقة ترجع من الصفر.</p><p class="hx-tip">ويطلع لك نفس الزر على الطلب نفسه في صفحة الطلبات.</p>'}]}
 
+/* ================= discount codes =================
+   The owner makes a code (like MATCHA10), shares it, and the customer types it when ordering.
+   The discount comes off the drinks only, never the delivery fee. The server counts every use. */
+const cdf=new Intl.DateTimeFormat('ar-u-nu-latn',{day:'numeric',month:'long',year:'numeric'});
+const dayStr=d=>cdf.format(new Date(d+'T12:00:00+03:00'));
+const todayStr=()=>{const d=new Date(Date.now()+3*3600e3);return d.toISOString().slice(0,10)};
+const normCode=v=>String(v||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).toUpperCase().replace(/[\s_-]+/g,'');
+const deal=c=>c.kind==='amt'?`خصم ${money(c.value)}`:`خصم ${M.numStr(c.value)}%`;
+/* is the code working right now? [css class, words] */
+function cpState(c){if(!c.on)return ['off','موقّف'];if(c.until&&Date.now()>Date.parse(c.until+'T23:59:59.999+03:00'))return ['end','انتهى'];if(c.limit&&c.uses>=c.limit)return ['end','خلص'];return ['on','شغّال']}
+const usesAr=n=>n===0?'ولا مرة':n===1?'مرة وحدة':n===2?'مرتين':`${n} ${n<=10?'مرات':'مرة'}`;
+function cpRules(c){const r=[];
+ r.push(c.min?`للطلبات اللي مشروباتها ${money(c.min)} أو أكثر`:'على أي طلب');
+ if(c.once)r.push('مرة وحدة لكل عميل (رقم جوال)');
+ if(c.limit)r.push(c.limit===1?'استخدام واحد بس':c.limit===2?'استخدامين بس':`أول ${c.limit} ${c.limit<=10?'استخدامات':'استخدام'} بس`);
+ r.push(c.until?`آخر يوم: ${dayStr(c.until)}`:'بدون تاريخ نهاية');return r}
+function couponCard(c){const [st,stl]=cpState(c);
+ return `<article class="lcard ccard ${st}" data-c="${esc(c.code)}"><div class="lh"><b class="ccode" dir="ltr">${esc(c.code)}</b><span class="cst ${st}">${stl}</span></div>
+<p class="cdeal">${deal(c)} <small>على المشروبات</small></p>
+<ul class="crules">${cpRules(c).map(x=>`<li>${x}</li>`).join('')}</ul>
+<p class="lstats"><span>استخدموه: <b>${usesAr(c.uses||0)}</b>${c.limit?` من ${c.limit}`:''}</span><span>مجموع الخصم: <b>${money(c.given||0)}</b></span></p>
+<div class="lact"><button class="btn ${c.on?'':'g'}" data-cp="toggle">${c.on?'⏸ أوقف الكود':'▶ شغّل الكود'}</button><button class="btn" data-cp="share">📤 شارك الكود</button><button class="btn" data-cp="edit">✏️ تعديل</button></div></article>`}
+function renderCoupons(){const p=page();
+ p.innerHTML=`<div class="ph1"><h1>كوبونات الخصم</h1><p>سوّ كود خصم وأرسله لعملائك (في إنستقرام أو واتساب مثلاً). العميل يكتب الكود وقت الطلب، والخصم ينقص من سعر المشروبات.</p></div>
+<button class="helpb" data-cp="help">${ICO.help}<span><b>كيف تستخدم كوبونات الخصم؟</b><small>اضغط هنا ونشرح لك كل شي خطوة بخطوة</small></span><i aria-hidden="true">←</i></button>
+<div id="clist">${A.coupons?'':'<div class="tload">جاري التحميل… ♡</div>'}</div>`;
+ if(A.coupons)drawCoupons();
+ api('coupons').then(j=>{A.coupons=j.coupons||[];if(A.page==='coupons')drawCoupons()}).catch(e=>{if(A.page==='coupons'&&!A.coupons)$('#clist').innerHTML=`<div class="empty">${esc(errMsg(e))}</div>`})}
+function drawCoupons(){const box=$('#clist');if(!box||!A.coupons)return;const n=A.coupons.filter(c=>cpState(c)[0]==='on').length;
+ box.innerHTML=`<div class="lgrid"><button class="dnew cnew" data-cp="new">+ كوبون جديد</button>${A.coupons.map(couponCard).join('')}</div>`+
+  (A.coupons.length?`<p class="lsum" style="margin-top:12px">${A.coupons.length} ${A.coupons.length===1?'كوبون':'كوبونات'} · ${n?`${n} شغّال الحين`:'ولا واحد شغّال الحين، فالعملاء ما يشوفون خانة الكود'}</p>`
+  :`<div class="empty">${M.catSVG('hi')}ما سوّيت كوبونات بعد. اضغط «كوبون جديد» وسوّ أول كود خصم ♡</div>`)}
+async function saveCoupon(c,isNew){const j=await api('coupons/'+encodeURIComponent(c.code),{method:'PUT',body:{...c,new:isNew}});const i=A.coupons.findIndex(x=>x.code===j.coupon.code);
+ if(i<0)A.coupons.unshift(j.coupon);else A.coupons[i]=j.coupon;if(A.page==='coupons')drawCoupons();return j.coupon}
+const shareText=c=>`استخدم الكود ${c.code} وخذ ${deal(c)} على طلبك من ${M.bName(1)} ♡${c.min?`\n(للطلبات من ${money(c.min)} وفوق)`:''}${c.until?`\nإلى ${dayStr(c.until)}`:''}\n${location.origin}`;
+async function shareCoupon(c){const text=shareText(c);
+ try{if(navigator.share){await navigator.share({text});return}}catch(e){if(e&&e.name==='AbortError')return}
+ try{await navigator.clipboard.writeText(text);toast('تم نسخ رسالة الكوبون ✓ الصقها في واتساب أو إنستقرام')}catch(e){prompt('انسخ هذي الرسالة:',text)}}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-cp]');if(!b||!$('#page')?.contains(b))return;const a=b.dataset.cp;
+ if(a==='help')return tour(couponSteps());
+ if(a==='new')return couponSheet(null);
+ const code=b.closest('.ccard')?.dataset.c,c=A.coupons?.find(x=>x.code===code);if(!c)return;
+ if(a==='edit')couponSheet(c);
+ if(a==='share')shareCoupon(c);
+ if(a==='toggle'){if(c.on&&!(await ask({title:`توقف الكود ${c.code}؟`,body:'العملاء ما يقدرون يستخدمونه لين تشغّله مرة ثانية.',ok:'أوقفه'})))return;
+  b.disabled=true;try{await saveCoupon({...c,on:!c.on},false);toast(c.on?'تم ✓ الكود موقّف':'تم ✓ الكود شغّال الحين')}catch(x){b.disabled=false;if(x.code!=='auth')toast(errMsg(x),true)}}});
+/* the form for a new code, or for changing one */
+const CPWORDS=['MATCHA','SWEET','MOCHI','HELLO','YUMMY','SIP','LOVE','TREAT'];
+const suggestCode=v=>CPWORDS[Math.floor(Math.random()*CPWORDS.length)]+(v&&v<100?v:Math.floor(10+Math.random()*89));
+function couponSheet(src){const isNew=!src;const c=src?clone(src):{code:'',kind:'pct',value:10,min:0,limit:0,once:false,until:'',on:true};
+ const start=JSON.stringify(c);let T=null;
+ const sh=document.createElement('div');sh.className='sheet';document.body.appendChild(sh);document.body.style.overflow='hidden';
+ const close=async force=>{if(!force&&JSON.stringify(c)!==start&&!(await ask({title:'تطلع بدون حفظ؟',body:'التعديلات على هذا الكوبون بتضيع.',ok:'اطلع بدون حفظ',cancel:'ارجع',danger:true})))return;T?.end();sh.remove();document.body.style.overflow='';removeEventListener('keydown',kd)};
+ const kd=e=>{if(e.key==='Escape'&&!$('.modal')&&!$('.tour'))close()};addEventListener('keydown',kd);
+ const ex=()=>{const q=$('#cpex',sh);if(!q)return;const sub=c.min>50?c.min:50,d=Math.min(sub,c.kind==='amt'?+c.value||0:sub*(+c.value||0)/100);
+  q.innerHTML=+c.value>0?`مثال: عميل طلب مشروبات بـ <b>${money(sub)}</b>، يوفّر <b>${money(Math.round(d*100)/100)}</b> ويدفع <b>${money(Math.round((sub-d)*100)/100)}</b>${'<br><small>رسوم التوصيل ما يشملها الخصم</small>'}`:'اكتب قيمة الخصم فوق'};
+ sh.innerHTML=`<div class="sbox" role="dialog" aria-modal="true" aria-labelledby="csh"><div class="shd"><h2 id="csh">${isNew?'كوبون جديد':'تعديل الكوبون '+esc(c.code)}</h2><button class="btn" data-k="close" aria-label="إغلاق">✕</button></div>
+<div class="sbd">
+<section class="sec" id="k-code"><h3><i>1</i>الكود</h3>${isNew?`<p class="hint">الكلمة اللي يكتبها العميل. حروف إنجليزية وأرقام بس، من 3 إلى 20.</p>
+<span class="lrow"><input id="kcode" class="kcode" dir="ltr" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="MATCHA10" value="${esc(c.code)}" aria-label="الكود"><button type="button" class="btn" data-k="suggest">🎲 اقترح كود</button></span>`
+ :`<p class="kcode ro" dir="ltr">${esc(c.code)}</p><p class="hint">الكود نفسه ما يتغيّر. تبي كود ثاني؟ سوّ كوبون جديد.</p>`}<p class="lerr" id="kcerr" role="alert"></p></section>
+<section class="sec" id="k-deal"><h3><i>2</i>كم الخصم؟</h3>
+<div class="rad">${[['pct','نسبة مئوية %','مثال: 10% من سعر المشروبات'],['amt','مبلغ ثابت (ر.س)','مثال: 5 ر.س من سعر المشروبات']].map(([v,l,s])=>`<label><input type="radio" name="kkind" value="${v}" ${c.kind===v?'checked':''}><span>${l}<small>${s}</small></span></label>`).join('')}</div>
+<label class="fld" style="margin-top:12px"><span id="kvl">${c.kind==='amt'?'مبلغ الخصم (ر.س)':'نسبة الخصم (%)'}</span><input type="number" min="0" ${c.kind==='pct'?'max="100"':''} step="${c.kind==='pct'?1:0.5}" inputmode="decimal" dir="ltr" data-k="value" value="${c.value||''}"></label>
+<p class="cpex" id="cpex"></p><p class="lerr" id="kverr" role="alert"></p></section>
+<section class="sec" id="k-rules"><h3><i>3</i>شروط (اختياري)</h3><p class="hint">خلّ الخانة فاضية إذا ما تبي الشرط.</p>
+<div class="g2"><label class="fld">أقل مبلغ للمشروبات (ر.س)<input type="number" min="0" step="1" inputmode="decimal" dir="ltr" data-k="min" value="${c.min||''}" placeholder="بدون حد"></label>
+<label class="fld">كم مرة يُستخدم الكود كله؟<input type="number" min="0" step="1" inputmode="numeric" dir="ltr" data-k="limit" value="${c.limit||''}" placeholder="بدون حد"></label></div>
+<div class="rad k1"><label><input type="checkbox" data-k="once" ${c.once?'checked':''}><span>مرة وحدة لكل عميل<small>نعرف العميل من رقم جواله</small></span></label></div>
+<label class="fld" style="margin-top:12px">آخر يوم يشتغل فيه الكود<span class="lrow"><input type="date" data-k="until" dir="ltr" min="${todayStr()}" value="${esc(c.until)}"><button type="button" class="btn" data-k="nountil" ${c.until?'':'hidden'}>شيل التاريخ</button></span></label>
+<p class="hint" id="kuntil">${c.until?`يشتغل لين آخر يوم ${dayStr(c.until)}`:'بدون تاريخ: يشتغل لين توقفه أنت'}</p></section>
+</div>
+<div class="sft"><button class="btn p" data-k="save">${isNew?'إنشاء الكوبون':'حفظ الكوبون'}</button><button class="btn" data-k="close">إلغاء</button>${isNew?'':'<button class="lnk red" data-k="del">حذف الكوبون</button>'}</div></div>`;
+ ex();
+ sh.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;
+  if(t.id==='kcode'){c.code=normCode(t.value);$('#kcerr',sh).textContent=''}
+  if(t.name==='kkind'){c.kind=t.value;const v=$('[data-k=value]',sh);$('#kvl',sh).textContent=c.kind==='amt'?'مبلغ الخصم (ر.س)':'نسبة الخصم (%)';v.step=c.kind==='pct'?1:0.5;c.kind==='pct'?v.max=100:v.removeAttribute('max');ex()}
+  if(k==='value'){c.value=Math.max(0,parseFloat(t.value)||0);$('#kverr',sh).textContent='';ex()}
+  if(k==='min'){c.min=Math.max(0,parseFloat(t.value)||0);ex()}
+  if(k==='limit')c.limit=Math.max(0,Math.floor(parseFloat(t.value)||0));
+  if(k==='once')c.once=t.checked;
+  if(k==='until'){c.until=t.value||'';$('[data-k=nountil]',sh).hidden=!c.until;$('#kuntil',sh).textContent=c.until?`يشتغل لين آخر يوم ${dayStr(c.until)}`:'بدون تاريخ: يشتغل لين توقفه أنت'}});
+ sh.addEventListener('change',e=>{if(e.target.name==='kkind'||e.target.dataset.k==='once'||e.target.dataset.k==='until')e.target.dispatchEvent(new Event('input',{bubbles:true}))});
+ sh.addEventListener('click',async e=>{if(e.target===sh)return close();const b=e.target.closest('[data-k]');if(!b||b.tagName==='INPUT')return;const k=b.dataset.k;
+  if(k==='close')close();
+  if(k==='suggest'){c.code=suggestCode(c.kind==='pct'?c.value:0);$('#kcode',sh).value=c.code;$('#kcerr',sh).textContent=''}
+  if(k==='nountil'){c.until='';const i=$('[data-k=until]',sh);i.value='';i.dispatchEvent(new Event('input',{bubbles:true}))}
+  if(k==='del'){if(!(await ask({title:`حذف الكوبون ${c.code}؟`,body:'العملاء ما يقدرون يستخدمونه بعدها. الطلبات اللي استخدمته تبقى زي ما هي.',ok:'احذف',danger:true})))return;
+   try{await api('coupons/'+encodeURIComponent(c.code),{method:'DELETE'});A.coupons=A.coupons.filter(x=>x.code!==c.code);drawCoupons();toast('تم حذف الكوبون');close(true)}catch(x){if(x.code!=='auth')toast(errMsg(x),true)}}
+  if(k==='save'){
+   if(!/^[A-Z0-9]{3,20}$/.test(c.code)){$('#kcerr',sh).textContent='الكود لازم يكون من 3 إلى 20 حرف إنجليزي أو رقم، بدون مسافات';$('#kcode',sh)?.focus();return}
+   if(!(c.value>0)){$('#kverr',sh).textContent='اكتب كم الخصم';$('[data-k=value]',sh).focus();return}
+   if(c.kind==='pct'&&c.value>100){$('#kverr',sh).textContent='النسبة ما تزيد عن 100%';$('[data-k=value]',sh).focus();return}
+   b.disabled=true;
+   try{await saveCoupon(c,isNew);toast(isNew?`تم ✓ الكود ${c.code} شغّال، شاركه مع عملائك`:'تم الحفظ ✓');close(true)}
+   catch(x){b.disabled=false;if(x.code==='exists'){$('#kcerr',sh).textContent='فيه كوبون بنفس هذا الكود. اختر كود ثاني.';$('#kcode',sh)?.focus();return}if(x.code!=='auth')toast(errMsg(x),true)}}});
+ setTimeout(()=>(isNew?$('#kcode',sh):$('[data-k=value]',sh))?.focus({preventScroll:true}),50)}
+function couponSteps(){return [
+ {title:'كوبونات الخصم',body:'<p>الكوبون كلمة زي <b dir="ltr">MATCHA10</b> تعطيها لعملائك. العميل يكتبها في صفحة الطلب، والخصم ينقص من سعر المشروبات على طول.</p><p class="hx-tip">خانة الكود تطلع للعملاء بس لما يكون عندك كوبون واحد شغّال على الأقل.</p>'},
+ {el:'.cnew',title:'سوّ كوبون',body:'<p>اضغط هنا، اكتب الكود (أو اضغط <b>«اقترح كود»</b>)، واختار الخصم: نسبة مثل 10%، أو مبلغ مثل 5 ر.س.</p><p class="hx-tip">وتقدر تحط شروط: أقل مبلغ للطلب، أو عدد مرات، أو مرة لكل عميل، أو آخر يوم.</p>'},
+ {el:()=>$('.ccard .lstats'),title:'كم مرة استخدموه',body:'<p>تشوف كم طلب استخدم الكود، وكم مجموع الخصم اللي أعطيته.</p>'},
+ {el:()=>$('.ccard .lact'),title:'أوقف، شارك، عدّل',body:'<p><b>«أوقف الكود»</b> يوقفه على طول بدون ما تحذفه. <b>«شارك الكود»</b> يجهّز لك رسالة ترسلها في واتساب أو إنستقرام.</p>'},
+ {title:'في صفحة الطلبات',body:'<p>الطلب اللي فيه كود يطلع عليه سطر الخصم واسم الكود، والمجموع بعد الخصم. وسطر الخصم يطلع بعد في رسالة الواتساب.</p>'}]}
+
 /* ================= store settings: logo size, pickup/delivery, payment, location ================= */
 const PAYICO={cash:'💵',card:'💳',transfer:'🏦',applepay:''};
 const DEF_SET={pickup:true,delivery:true,fee:0,pay:['cash','card'],transfer:'',loc:null,logoSize:1};
@@ -675,9 +780,10 @@ function renderSettings(){const W=A.sw||(A.sw=Object.assign(clone(DEF_SET),clone
 <div class="lsz"><div class="seg2" role="group" aria-label="حجم الشعار">${SIZES.map(([l,v])=>`<button type="button" data-s2="lsz" data-v="${v}" class="${Math.abs(W.logoSize-v)<.01?'on':''}">${l}</button>`).join('')}</div>
 <label class="lrange"><span>أصغر</span><input type="range" min="0.7" max="1.6" step="0.05" data-s2="logoSize" value="${W.logoSize}" aria-label="حجم الشعار"><span>أكبر</span></label></div>
 <h4 class="bsub">كذا يطلع للعميل:</h4><div id="lgprev"></div></section>
+<section class="sec" id="s-ntfy"><h3><i>5</i>تنبيهات على جوالك</h3><p class="hint">يوصلك تنبيه على الجوال مع كل طلب جديد، ولما عميل يقول إنه برا المحل، حتى لو لوحة التحكم مسكّرة. نستخدم تطبيق مجاني اسمه <b dir="ltr">ntfy</b>.</p><div id="ntbox"><p class="hint">لحظة…</p></div></section>
 </div>
 <div class="savebar ${A.sdirty?'':'hide'}" id="ssbar"><span>عندك تغييرات ما انحفظت</span><button class="btn" data-s2="undo">تراجع</button><button class="btn p" data-s2="save">حفظ الإعدادات</button></div>`;
- logoPrev();locPrev();initMap()}
+ logoPrev();locPrev();initMap();ntDraw();ntLoad()}
 function sDirty(){A.sdirty=true;$('#ssbar')?.classList.remove('hide')}
 function logoPrev(){const W=A.sw,b=$('#lgprev');if(!b)return;b.innerHTML=brandPreview({name:A.brand.name||'',ar:A.brand.ar||'',logo:A.brand.logo||''});b.firstElementChild.style.setProperty('--lgs',W.logoSize);
  $$('[data-s2=lsz]').forEach(x=>x.classList.toggle('on',Math.abs(W.logoSize-+x.dataset.v)<.01))}
@@ -724,12 +830,39 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-s2]'
   b.disabled=true;const body={pickup:W.pickup,delivery:W.delivery,fee:W.fee,pay:W.pay,transfer:W.transfer,logoSize:W.logoSize,loc:W.loc?{...W.loc,note:W.note}:null};
   try{const j=await api('settings',{method:'PUT',body});A.set=j.settings;M.setSettings(A.set);A.sw=null;A.sdirty=false;renderSettings();toast('تم الحفظ ✓ والعملاء يشوفون التغيير الحين')}
   catch(x){b.disabled=false;if(x.code!=='auth')toast(errMsg(x),true)}}});
+/* ---------- phone notifications (ntfy). Saved on their own, right away, apart from «حفظ الإعدادات». ---------- */
+const NTAPP={android:'https://play.google.com/store/apps/details?id=io.heckel.ntfy',ios:'https://apps.apple.com/app/ntfy/id1625396347'};
+function ntLoad(){if(A.nt!==undefined)return;api('ntfy').then(j=>{A.nt=j.ntfy;ntDraw()}).catch(e=>{const b=$('#ntbox');if(b&&e.code!=='auth')b.innerHTML=`<p class="lerr">${esc(errMsg(e))}</p>`})}
+function ntDraw(){const b=$('#ntbox');if(!b||A.nt===undefined)return;const n=A.nt,apps=`<div class="lbtns"><a class="btn" href="${NTAPP.android}" target="_blank" rel="noopener">أندرويد</a><a class="btn" href="${NTAPP.ios}" target="_blank" rel="noopener">آيفون</a></div>`;
+ if(!n||!n.topic){b.innerHTML=`<ol class="ntst"><li><b>ثبّت تطبيق ntfy على جوالك</b>${apps}</li><li><b>اضغط الزر هنا</b> ونعطيك اسم خاص بمحلك تشترك فيه من التطبيق.<div><button class="btn p" data-nt="new">🔔 فعّل التنبيهات على جوالي</button></div></li></ol>`;return}
+ const link=n.server+'/'+n.topic;
+ b.innerHTML=`<ol class="ntst"><li><b>ثبّت تطبيق ntfy على جوالك</b>${apps}</li>
+<li><b>في التطبيق اضغط ➕ واكتب هذا الاسم</b><span class="lrow ntt"><input readonly dir="ltr" value="${esc(n.topic)}" aria-label="اسم التنبيهات" onclick="this.select()"><button type="button" class="btn" data-nt="copy">نسخ</button></span>${n.server!=='https://ntfy.sh'?`<small class="hint">واكتب السيرفر: <bdi dir="ltr">${esc(n.server)}</bdi></small>`:''}<small class="hint">أو افتح هذا الرابط من جوالك: <a href="${esc(link)}" target="_blank" rel="noopener" dir="ltr">${esc(link.replace(/^https?:\/\//,''))}</a></small><small class="hint">⚠️ لا تعطي الاسم لأحد: اللي يعرفه يشوف طلباتك.</small></li>
+<li><b>جرّب</b><div><button class="btn p" data-nt="test">أرسل تنبيه تجربة</button></div></li></ol>
+<h4 class="bsub">وش يوصلك؟</h4><div class="rad"><label><input type="checkbox" data-ntk="orders" ${n.orders?'checked':''}><span>طلب جديد<small>اسم العميل والمشروبات والمبلغ</small></span></label><label><input type="checkbox" data-ntk="outside" ${n.outside?'checked':''}><span>العميل برا المحل 🚗<small>تنبيه عالي لما يضغط «أنا برا المحل»</small></span></label></div>
+<details class="ntadv"><summary>إعدادات متقدمة</summary><p class="hint">لو عندك سيرفر ntfy خاص. إذا ما تعرف وش هذا، خلّها مثل ما هي.</p>
+<label class="fld">السيرفر<input dir="ltr" id="ntsrv" value="${esc(n.server)}" placeholder="https://ntfy.sh" autocomplete="off"></label>
+<label class="fld">رمز الدخول (Access token)<input dir="ltr" id="nttok" type="password" placeholder="${n.hasToken?'محفوظ ••••• (اتركه فاضي عشان يبقى)':'اختياري'}" autocomplete="off"></label>
+${n.hasToken?'<label class="hint"><input type="checkbox" id="ntnotok"> شيل رمز الدخول</label>':''}
+<div class="wnav" style="justify-content:flex-start"><button class="btn" data-nt="adv">حفظ</button><button class="btn" data-nt="new">اسم جديد للتنبيهات</button></div></details>
+<button class="lnk red" data-nt="off">أوقف التنبيهات على الجوال</button>`}
+async function ntSave(body,ok){try{const j=await api('ntfy',{method:'PUT',body});A.nt=j.ntfy;ntDraw();if(ok)toast(ok);return true}catch(e){if(e.code!=='auth')toast(errMsg(e),true);ntDraw();return false}}
+const ntBody=(x={})=>({server:A.nt.server,topic:A.nt.topic,orders:A.nt.orders,outside:A.nt.outside,...x});
+document.addEventListener('change',e=>{const k=e.target.dataset?.ntk;if(!k||!A.nt)return;ntSave(ntBody({[k]:e.target.checked}),'تم ✓')});
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-nt]');if(!b||!$('#ntbox')?.contains(b))return;const a=b.dataset.nt;
+ if(a==='copy'){const v=A.nt?.topic||'';try{await navigator.clipboard.writeText(v);toast('تم النسخ ✓ الصقه في التطبيق')}catch(x){$('.ntt input')?.select();toast('اضغط مطوّل على الاسم وانسخه')}return}
+ if(a==='new'){if(A.nt?.topic&&!await ask({title:'اسم جديد للتنبيهات؟',body:'الاسم القديم يوقف، ولازم تشترك بالاسم الجديد في التطبيق مرة ثانية.',ok:'أعطني اسم جديد'}))return;
+  b.disabled=true;if(await ntSave(A.nt?.topic?ntBody({topic:'new'}):{topic:'new'},'تم ✓ الحين اشترك بالاسم في التطبيق'))$('#ntbox')?.scrollIntoView({block:'center',behavior:'smooth'});return}
+ if(a==='test'){b.disabled=true;try{await api('ntfy/test',{method:'POST'});toast('أرسلنا التنبيه ✓ شيك جوالك')}catch(x){if(x.code!=='auth')toast(x.code==='send'?'ما قدرنا نرسل التنبيه. شيك إعدادات السيرفر.':errMsg(x),true)}b.disabled=false;return}
+ if(a==='adv'){const tok=$('#nttok').value.trim(),body=ntBody({server:$('#ntsrv').value.trim()});if(tok)body.token=tok;else if($('#ntnotok')?.checked)body.token='';b.disabled=true;await ntSave(body,'تم الحفظ ✓');return}
+ if(a==='off'){if(!await ask({title:'توقف التنبيهات على الجوال؟',body:'ما بيوصلك تنبيه على الجوال بعدها. تقدر تشغلها مرة ثانية متى ما تبي.',ok:'أوقفها',danger:true}))return;b.disabled=true;await ntSave({off:true},'وقّفنا التنبيهات')}});
 function settingSteps(){return [
  {el:'#s-modes .rad',title:'استلام أو توصيل؟',body:'<p>اختار إذا محلك يسوي استلام من المحل، أو توصيل، أو الاثنين. العميل يشوف بس اللي تختاره.</p>'},
  {el:()=>$('#feebox:not(.hide)')||$('#s-modes'),title:'رسوم التوصيل',body:'<p>المبلغ اللي ينضاف على كل طلب توصيل. يطلع للعميل في سطر لحاله في الفاتورة، ويطلع لك في الطلب ورسالة الواتساب.</p>'},
  {el:'.paysel',title:'طرق الدفع',body:'<p>حط ✓ على الطرق اللي تقبلها. لو اخترت <b>تحويل بنكي</b>، اكتب بيانات حسابك في الخانة اللي تطلع، والعميل يشوفها وقت الطلب.</p>'},
  {el:'#lmap',title:'موقع المحل',body:'<p>اضغط على مكان محلك في الخريطة، أو اضغط <b>«أنا في المحل الحين»</b> وأنت في المحل، أو الصق رابط قوقل ماب.</p><p class="hx-tip">العميل اللي يختار «استلام» يشوف الخريطة وأزرار تفتحها في جواله.</p>'},
  {el:'#s-logo',title:'حجم الشعار',body:'<p>اختار صغير أو وسط أو كبير، أو حرّك الشريط. تشوف الشكل تحت على طول.</p>'},
+ {el:'#s-ntfy',title:'تنبيهات على جوالك',body:'<p>ثبّت تطبيق <b>ntfy</b> المجاني، واضغط <b>«فعّل التنبيهات»</b>، وبعدين اشترك بالاسم اللي يطلع لك. يوصلك تنبيه مع كل طلب حتى لو الصفحة مسكّرة.</p><p class="hx-tip">هذا القسم ينحفظ لحاله على طول، ما يحتاج «حفظ الإعدادات».</p>'},
  {el:()=>$('#ssbar:not(.hide)')||$('#s-logo'),title:'لا تنسى تحفظ',body:'<p>التغييرات ما توصل للعملاء إلا لما تضغط <b>«حفظ الإعدادات»</b>. الزر يطلع تحت أول ما تغيّر أي شي.</p>'}]}
 
 /* ================= go ================= */
