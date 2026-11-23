@@ -16,7 +16,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
    Words in {curly brackets} are filled in by the shop (a name, a price…). The admin text editor can change any of these. */
 let LANG=lsGet('mm-lang','ar')==='en'?'en':'ar';
 const TX={
- brand:['Matcha Mochi','ماتشا موتشي'],t1:['Matcha','ماتشا'],t2:['Mochi','موتشي'],
+ brand:['{shop}','{shop}'],t1:['{shopA}','{shopA}'],t2:['{shopB}','{shopB}'],
  tick1:[' ✿ Freshly whisked every day ♡ Strawberry season is here ♡ 100% real matcha ♡ Not too sweet ♡ Made with love',' ✿ نخفقه طازج كل يوم ♡ موسم الفراولة وصل ♡ ماتشا أصلي 100% ♡ مو حالي مرّة ♡ مسوّى بحب'],
  tick2:[' ♡ いちご抹茶 ♡ A love story in every sip ♡ Rolled with love',' ♡ いちご抹茶 ♡ قصة حب في كل رشفة ♡ ملفوف بحب'],
  stampJp:['抹茶','抹茶'],pct:['100%','100%'],real:['real matcha','ماتشا أصلي'],seasonJp:['季節 限定','季節 限定'],
@@ -28,7 +28,7 @@ const TX={
  h2b:['Pump the machine','اضغط المضخة'],h2p:['Each pump pours a flavour into your cup.','كل ضغطة تصب نكهة في كوبك.'],
  h3b:['Tap to order','اضغط واطلب'],h3p:['Add as many drinks as you like, then send your order and Mochi says thank you.','أضف كم مشروب تبي، أرسل طلبك، وموتشي يقولك شكراً.'],
  note:['Psst… this shop is full of secrets. Tap things. And keep an eye out for Mochi the cat, he loves to repaint things ♡','بسّ… هالمحل مليان أسرار. اضغط على الأشياء. وانتبه لموتشي القطو، يحب يلوّن الأشياء ♡'],
- foot:['Made with love · Matcha Mochi ♡','مسوّى بحب · ماتشا موتشي ♡'],
+ foot:['Made with love · {shop} ♡','مسوّى بحب · {shop} ♡'],
  pick:['Pick','اختر'],make:['Make','حضّر'],cartS:['Cart','السلة'],payS:['Order','اطلب'],
  swipe:['swipe me~','اسحبني~'],pickH:['Pick your drink','اختر مشروبك'],
  newT:['季節限定 new','季節限定 جديد'],fav:['♡ favourite','♡ مفضّل'],
@@ -50,7 +50,7 @@ const TX={
  howWant:['How do you want it?','كيف تبيه؟'],pickup:['Pickup','استلام'],delivery:['Delivery','توصيل'],
  name:['Your name','الاسم'],namePh:['Sara','سارة'],phone:['Phone','الجوال'],phonePh:['05x xxx xxxx','05x xxx xxxx'],
  addr:['Delivery address','عنوان التوصيل'],addrPh:['Street, building, district','الشارع، المبنى، الحي'],
- pickNote:['Pick up at the Matcha Mochi counter. We’ll text you when it’s ready ♡','استلم من كاونتر ماتشا موتشي. بنرسل لك رسالة لما يجهز ♡'],
+ pickNote:['Pick up at the {shop} counter. We’ll text you when it’s ready ♡','استلم من كاونتر {shop}. بنرسل لك رسالة لما يجهز ♡'],
  notes:['Notes for us (optional)','ملاحظات لنا (اختياري)'],notesPh:['Less ice, extra hot, a birthday message…','ثلج خفيف، حار زيادة، رسالة عيد ميلاد…'],
  payWith:['How will you pay?','كيف بتدفع؟'],cash:['Cash','كاش'],card:['Card / mada','بطاقة / مدى'],
  payNote:['You pay when you receive your order ♡','تدفع لما تستلم طلبك ♡'],
@@ -64,18 +64,28 @@ const TX={
  catGot1:['you got me! ♡','مسكتني! ♡'],catGot2:['nyaaa!','ميااااو!'],catGot3:['ok ok, you win~','طيب طيب، فزت~'],
  pawLeft:['left a paw on your cup ♡','تركت بصمة على كوبك ♡'],
  caught:['Times you caught Mochi','كم مرة مسكت موتشي'],catTap:['Mochi the cat is here! Tap to catch him','موتشي القطو هنا! اضغط عشان تمسكه'],
- back:['Back','رجوع'],prev:['Previous drink','المشروب السابق'],next:['Next drink','المشروب التالي'],home:['Matcha Mochi home','الرئيسية'],
+ back:['Back','رجوع'],prev:['Previous drink','المشروب السابق'],next:['Next drink','المشروب التالي'],home:['{shop} home','الرئيسية'],
  cartLabel:['Open my cart','افتح السلة'],langBtn:['ع','EN'],langLabel:['التبديل للعربية','Switch to English'],
- waOrder:['Hi {name} ♡ This is Matcha Mochi about your order {order}:\n{items}\nTotal: {total}','هلا {name} ♡ معك ماتشا موتشي بخصوص طلبك {order}:\n{items}\nالمجموع: {total}'],
+ waOrder:['Hi {name} ♡ This is {shop} about your order {order}:\n{items}\nTotal: {total}','هلا {name} ♡ معك {shop} بخصوص طلبك {order}:\n{items}\nالمجموع: {total}'],
  waReady:['Hi {name}! Your order is ready! ♡ ({order})','هلا {name}! طلبك جاهز! ♡ ({order})']};
 
 /* what each {word} means, for the admin text editor */
-const TOKENS={n:'المبلغ',drink:'اسم المشروب',max:'أكثر عدد',name:'اسم العميل',from:'من الساعة',to:'إلى الساعة',count:'عدد الأختام الباقية',total:'المجموع',order:'رقم الطلب',items:'قائمة المشروبات'};
+const TOKENS={shop:'اسم المحل',shopA:'أول جزء من اسم المحل',shopB:'باقي اسم المحل',n:'المبلغ',drink:'اسم المشروب',max:'أكثر عدد',name:'اسم العميل',from:'من الساعة',to:'إلى الساعة',count:'عدد الأختام الباقية',total:'المجموع',order:'رقم الطلب',items:'قائمة المشروبات'};
 
 let OV={};/* the admin's published text changes: {key:[english, arabic]} */
 const ix=()=>LANG==='ar'?1:0;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const rawL=(k,i)=>{const o=OV[k];if(o&&typeof o[i]==='string')return o[i];const v=TX[k];return v?v[i]:k};
+/* the store's own name and logo, set by the owner in the admin; empty = the template's default */
+let BRAND={name:'',ar:'',logo:''};
+const DEF_NAME=['Matcha Mochi','ماتشا موتشي'];
+const bName=i=>(i?BRAND.ar||BRAND.name:BRAND.name||BRAND.ar)||DEF_NAME[i?1:0];
+/* the big two-line title on the home page: the name split in two halves */
+const halves=s=>{const w=String(s).trim().split(/\s+/),k=Math.ceil(w.length/2);return [w.slice(0,k).join(' '),w.slice(k).join(' ')]};
+const brandFill=(s,i)=>String(s).replace(/\{(shop|shopA|shopB)\}/g,(m,n)=>n==='shop'?bName(i):halves(bName(i))[n==='shopA'?0:1]);
+/* order numbers start with the store's initials: Matcha Mochi -> #MM-1234 */
+const code=()=>((BRAND.name||(BRAND.ar?'':DEF_NAME[0])).match(/[A-Za-z0-9]+/g)||[]).slice(0,3).map(w=>w[0].toUpperCase()).join('');
+const orderNo=no=>'#'+(code()?code()+'-':'')+no;
+const rawL=(k,i)=>{const o=OV[k];if(o&&typeof o[i]==='string')return brandFill(o[i],i);const v=TX[k];return v?brandFill(v[i],i):k};
 const fill=(s,vars,wrap)=>s.replace(/\{(\w+)\}/g,(m,n)=>vars&&n in vars?wrap(vars[n]):m);
 /* t: safe HTML; tp: plain text */
 const t=(k,vars,bold)=>fill(esc(rawL(k,ix())),vars,v=>bold?`<b>${esc(v)}</b>`:String(v));
@@ -85,7 +95,9 @@ const X=k=>EDIT?` data-tx="${k}"`:'';
 const XP=k=>EDIT?` data-txph="${k}"`:'';
 const nm=x=>(LANG==='ar'&&x&&x.ar)?x.ar:(x?x.name:'');
 const dsc=x=>(LANG==='ar'&&x&&x.descAr)?x.descAr:(x?x.desc:'');
+const ICON0=document.querySelector('link[rel=icon]')?.href||'';
 function applyLang(){const h=document.documentElement;h.lang=LANG;h.dir=LANG==='ar'?'rtl':'ltr';if(!LIB)document.title=tp('brand')}
+function setBrand(b){BRAND={name:String(b?.name||''),ar:String(b?.ar||''),logo:String(b?.logo||'')};const l=document.querySelector('link[rel=icon]');if(l)l.href=BRAND.logo||ICON0;if(!LIB)applyLang()}
 if(!LIB)applyLang();
 
 /* ================= menu (comes from the server) ================= */
@@ -121,7 +133,7 @@ function fixCart(){S.cart=(Array.isArray(S.cart)?S.cart:[]).filter(c=>c&&D(c.dri
 /* the order as the server and WhatsApp messages describe it */
 const snap=cart=>cart.map(c=>{const d=D(c.drink),s=SZ(c.size),m=MK(c.milk);return {drink:d.id,name:d.name,ar:d.ar,img:d.img,color:d.color,under:d.under||'',size:{name:s.name,ar:s.ar},milk:m?{name:m.name,ar:m.ar}:null,addons:chosen(c).map(([a,q])=>({name:a.name,ar:a.ar,q,price:a.price})),qty:c.qty,unit:total(c),line:total(c)*c.qty}});
 function waItems(o,i){const n=x=>(i&&x.ar)?x.ar:x.name;return o.items.map(it=>{const p=[n(it.size)];if(it.milk)p.push(n(it.milk));(it.addons||[]).forEach(a=>p.push(n(a)+(a.q>1?' ×'+a.q:'')));return `• ${it.qty}× ${n(it)} (${p.join(i?'، ':', ')})`}).join('\n')}
-function waText(k,o){const i=o.lang==='en'?0:1;return fill(rawL(k,i),{name:o.name,order:'#MM-'+o.no,items:waItems(o,i),total:moneyL(o.total,i)},String)}
+function waText(k,o){const i=o.lang==='en'?0:1;return fill(rawL(k,i),{name:o.name,order:orderNo(o.no),items:waItems(o,i),total:moneyL(o.total,i)},String)}
 
 /* ================= drawings ================= */
 let uid=0;
@@ -180,6 +192,7 @@ function catSVG(m='hi'){
  :`<circle cx="71" cy="95" r="8" fill="${L}"/><circle cx="129" cy="95" r="8" fill="${L}"/><circle cx="73.5" cy="92" r="2.6" fill="#fff"/><circle cx="131.5" cy="92" r="2.6" fill="#fff"/>`;
  return `<svg viewBox="0 0 200 182" class="cat" role="img" aria-label="Mochi"><path d="M42 80L50 18L92 48ZM158 80L150 18L108 48Z" fill="#fffaf5" stroke="${L}" stroke-width="5" stroke-linejoin="round"/><path d="M53 58L56 33L74 46ZM147 58L144 33L126 46Z" fill="#ffb3c4"/><ellipse cx="100" cy="104" rx="78" ry="60" fill="#fffaf5" stroke="${L}" stroke-width="5"/><path d="M88 49q12-24 32-11q-13 15-32 11z" fill="#8cc152" stroke="${L}" stroke-width="3.5" stroke-linejoin="round"/><path d="M124 46l10-8l4 12z" fill="#ff8fb1" stroke="${L}" stroke-width="3" stroke-linejoin="round"/><path d="M144 54l10-12l-4 14z" fill="#ff8fb1" stroke="${L}" stroke-width="3" stroke-linejoin="round"/>${eyes}<ellipse cx="52" cy="118" rx="13" ry="8" fill="#ff9fb4" opacity=".8"/><ellipse cx="148" cy="118" rx="13" ry="8" fill="#ff9fb4" opacity=".8"/><path d="M90 114q5 7 10 0q5 7 10 0" fill="none" stroke="${L}" stroke-width="4" stroke-linecap="round"/><path d="M28 106H6M28 117H8M172 106H194M172 117H192" stroke="${L}" stroke-width="3" stroke-linecap="round"/><ellipse cx="66" cy="166" rx="20" ry="13" fill="#fffaf5" stroke="${L}" stroke-width="5"/><ellipse cx="134" cy="166" rx="20" ry="13" fill="#fffaf5" stroke="${L}" stroke-width="5"/>${pawPath(66,166,.45,'#ffb3c4')}${pawPath(134,166,.45,'#ffb3c4')}</svg>`}
 const LOGO=`<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M18 6q7-5 10 2q-7 3-10-2z" fill="#4a8420"/><circle cx="20" cy="22" r="16" fill="#8cc152" stroke="${L}" stroke-width="3"/><g class="ey"><circle cx="14" cy="22" r="2.4" fill="${L}"/><circle cx="26" cy="22" r="2.4" fill="${L}"/></g><path d="M17 27q3 3 6 0" stroke="${L}" stroke-width="2.4" fill="none" stroke-linecap="round"/><ellipse cx="10" cy="27" rx="3" ry="2" fill="#ff9fb4"/><ellipse cx="30" cy="27" rx="3" ry="2" fill="#ff9fb4"/></svg>`;
+const logoHTML=(src=BRAND.logo)=>src?`<img class="blogo" src="${esc(src)}" alt="">`:LOGO;
 
 /* default menu card art, used until the owner uploads a photo */
 const artCache={};
@@ -208,8 +221,8 @@ const imgOf=(d,i=STORE.drinks.indexOf(d))=>d.img||drinkArt(d,i);
 const BAG=`<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h18l-2 16H9z" fill="#ffd3e0" stroke="${L}" stroke-width="2.5" stroke-linejoin="round"/><path d="M12 11V9a4 4 0 0 1 8 0v2" fill="none" stroke="${L}" stroke-width="2.5" stroke-linecap="round"/><path d="M13 19q3 3 6 0" fill="none" stroke="${L}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 
 /* the admin page borrows these */
-window.MM={TX,TOKENS,esc,drinkArt,icon,cupSVG,catSVG,LOGO,pawSVG,waText,moneyL,numStr,
- setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},rawL,lum,onC};
+window.MM={TX,TOKENS,esc,drinkArt,icon,cupSVG,catSVG,LOGO,logoHTML,pawSVG,waText,moneyL,numStr,orderNo,bName,halves,DEF_NAME,
+ setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},setBrand,getBrand:()=>BRAND,rawL,lum,onC};
 if(LIB){/* library only */}else{
 
 /* ================= shared bits ================= */
@@ -222,7 +235,7 @@ const milkChips=()=>STORE.milks.map(m=>`<button class="chip ${S.o.milk===m.id?'o
 const sizeSeg=()=>{const ss=dSizes(D(S.o.drink)),all=STORE.sizes;return ss.map(s=>{const i=all.indexOf(s);return `<button class="${S.o.size===s.id?'on':''}" aria-pressed="${S.o.size===s.id}" data-act="size" data-a="${s.id}"><span class="mini-cup" style="width:${14+i*4}px;height:${16+i*6}px"></span>${esc(nm(s))}<small${s.add?'':X('free')}>${s.add?'+'+money(s.add):t('free')}</small></button>`}).join('')};
 const LIVE={cup:()=>cupSVG(),total:()=>money(total()),tags:tagsHTML,milk:milkChips,size:sizeSeg};
 const prog=()=>{const st=['drink','machine','cart','pay'],n=['pick','make','cartS','payS'],i=st.indexOf(S.step);return `<div class="prog">${n.map((k,j)=>`${j?'<i></i>':''}<span class="${j===i?'on':j<i?'done':''}"${X(k)}>${j<i?'✓ ':''}${t(k)}</span>`).join('')}</div>`};
-const topbar=()=>`<header class="top">${S.step!=='land'&&!S.paid?`<button class="pill backb" data-act="back" aria-label="${t('back')}">${LANG==='ar'?'›':'‹'}</button>`:''}<button class="logo" data-act="logo" aria-label="${t('home')}">${LOGO}<b${X('brand')}>${t('brand')}</b></button><span class="pill paws" title="${t('caught')}" aria-label="${t('caught')}: ${S.caught}">${pawSVG()}<span id="caught">${S.caught}</span></span><button class="pill cartp" id="cartp" data-act="gocart" aria-label="${t('cartLabel')}">${BAG}<span class="n" id="cartn">${cartCount()||''}</span></button><button class="pill lang" data-act="lang" aria-label="${t('langLabel')}" lang="${LANG==='ar'?'en':'ar'}"${X('langBtn')}>${t('langBtn')}</button></header>`;
+const topbar=()=>`<header class="top">${S.step!=='land'&&!S.paid?`<button class="pill backb" data-act="back" aria-label="${t('back')}">${LANG==='ar'?'›':'‹'}</button>`:''}<button class="logo" data-act="logo" aria-label="${t('home')}">${logoHTML()}<b${X('brand')}>${t('brand')}</b></button><span class="pill paws" title="${t('caught')}" aria-label="${t('caught')}: ${S.caught}">${pawSVG()}<span id="caught">${S.caught}</span></span><button class="pill cartp" id="cartp" data-act="gocart" aria-label="${t('cartLabel')}">${BAG}<span class="n" id="cartn">${cartCount()||''}</span></button><button class="pill lang" data-act="lang" aria-label="${t('langLabel')}" lang="${LANG==='ar'?'en':'ar'}"${X('langBtn')}>${t('langBtn')}</button></header>`;
 /* bottom bar: k = label text key */
 const bbar=({k,act,small,amount,live,flat})=>`<div class="bbar ${flat?'flat':''}"><div class="tot"><small${X(small)}>${t(small)}</small><b ${live?'data-live="total"':''} id="btot">${money(amount)}</b></div><button class="cta wig" data-act="${act}"${X(k)}>${t(k)}</button></div>`;
 const fromPrice=d=>d?+d.price+Math.min(...dSizes(d).map(s=>+s.add||0)):0;
@@ -232,7 +245,7 @@ function landView(){const ds=STORE.drinks;return `
 <div class="lace"></div>
 <div class="ticker"><div${X('tick1')}>${t('tick1').repeat(4)}</div></div>
 <section class="hero ging">
- <div class="tit"><div class="t1 bub-g" data-paint${X('t1')}>${letters(t('t1'))}</div><div class="t2 bub-p" data-paint${X('t2')}>${letters(t('t2'))}</div><span class="stamp" data-act="spin" data-paint${X('stampJp')}>${t('stampJp')}</span></div>
+ <div class="tit"><div class="t1 bub-g" data-paint${X('t1')}>${letters(t('t1'))}</div>${t('t2').trim()?`<div class="t2 bub-p" data-paint${X('t2')}>${letters(t('t2'))}</div>`:''}<span class="stamp" data-act="spin" data-paint${X('stampJp')}>${t('stampJp')}</span></div>
  <div class="stage">
   <div class="bigcup" data-act="tickle">${cupSVG({drink:ds[0].id,size:'l',milk:STORE.milks.find(m=>m.id==='oat')?'oat':STORE.milks[0]?.id,ad:Object.fromEntries(dAddons(ds[0]).filter(a=>a.kind!=='syrup').slice(0,2).map((a,i)=>[a.id,i?1:2]))})}</div>
   <button class="badge b100" data-act="hundred" data-paint aria-label="${t('pct')} ${t('real')}"><span id="h100"${X('pct')}>${t('pct')}</span><small${X('real')}>${t('real')}</small></button>
@@ -305,7 +318,7 @@ ${bbar({k:'goCheckout',act:'topay',small:'yourTotal',amount:cartTotal(),flat:tru
 function receiptHTML(items,tot,stamped){return `<div class="slot" data-l="${t('receipt')}"${X('receipt')}></div><div class="receipt" id="receipt"><h3${X('brand')}>${t('brand')}</h3><div class="rcs">${items.slice(0,4).map(c=>`<div class="rc">${cupSVG(c)}</div>`).join('')}</div><ul class="rl">${items.map(c=>`<li><span><span class="q">${c.qty}×</span> ${esc(nm(D(c.drink)))}<small>${optsLine(c)}</small></span><b>${money(total(c)*c.qty)}</b></li>`).join('')}</ul><div class="rtot"><span${X('total')}>${t('total')}</span><span>${money(tot)}</span></div>${stamped?`<div class="paid"${X('paid')}>${t('paid')}</div>`:''}</div>`}
 function payView(){const P=S.pay;
  if(S.paid&&S.last){const o=S.last;return `${receiptHTML(o.items,o.total,true)}<div class="cheer"><div>${catSVG('happy')}</div><div class="bubble"${X('thx')}>${t('thx',{name:o.name||tp('friend')},true)}</div></div>
-<div class="thanks"><h2 class="bub-p"${X('thanksH')}>${t('thanksH')}</h2><div class="ticket"><small${X('yourOrder')}>${t('yourOrder')}</small><b>#MM-${esc(o.no)}</b><small${X('etaReady')}>${t('etaReady',{from:clock(new Date(S.ready[0])),to:clock(new Date(S.ready[1]))})}</small></div><p style="font-weight:900;margin:8px 0 2px"${X('stampCard')}>${t('stampCard')}</p><div class="scard">${Array.from({length:8},(_,i)=>`<i class="${i<S.stamps?'st':''}">${i<S.stamps?pawSVG('#ff4f86'):''}</i>`).join('')}</div><p class="small"${X(S.stamps>=8?'cardFull':'more')}>${S.stamps>=8?t('cardFull'):t('more',{count:8-S.stamps})}</p><button class="cta g" data-act="again"${X('again')}>${t('again')}</button></div>${EDIT?`<span${X('friend')} class="small" style="display:block;text-align:center;margin-top:8px;opacity:.7">${t('friend')}</span>`:''}<div style="height:30px"></div>`}
+<div class="thanks"><h2 class="bub-p"${X('thanksH')}>${t('thanksH')}</h2><div class="ticket"><small${X('yourOrder')}>${t('yourOrder')}</small><b>${esc(orderNo(o.no))}</b><small${X('etaReady')}>${t('etaReady',{from:clock(new Date(S.ready[0])),to:clock(new Date(S.ready[1]))})}</small></div><p style="font-weight:900;margin:8px 0 2px"${X('stampCard')}>${t('stampCard')}</p><div class="scard">${Array.from({length:8},(_,i)=>`<i class="${i<S.stamps?'st':''}">${i<S.stamps?pawSVG('#ff4f86'):''}</i>`).join('')}</div><p class="small"${X(S.stamps>=8?'cardFull':'more')}>${S.stamps>=8?t('cardFull'):t('more',{count:8-S.stamps})}</p><button class="cta g" data-act="again"${X('again')}>${t('again')}</button></div>${EDIT?`<span${X('friend')} class="small" style="display:block;text-align:center;margin-top:8px;opacity:.7">${t('friend')}</span>`:''}<div style="height:30px"></div>`}
  return `${prog()}${receiptHTML(S.cart,cartTotal(),false)}
 <div class="cheer"><div>${catSVG('hi')}</div><div class="bubble" id="catsay"${X('almost')}>${t('almost')}</div></div>
 <form class="form" data-form="pay" novalidate><h2${X('howWant')}>${t('howWant')}</h2>
@@ -348,9 +361,9 @@ function waView(){const o={no:'1234',name:LANG==='ar'?'سارة':'Sara',lang:LAN
  <p class="small" style="text-align:center">العميل يستلم الرسالة باللغة اللي طلب فيها</p></div>`}
 
 /* ================= render ================= */
-const LOADER=`<div class="loading"><div>${LOGO}<p>♡</p></div></div>`;
+const LOADER=()=>`<div class="loading"><div>${logoHTML()}<p>♡</p></div></div>`;
 function render(toTop){
- if(!STORE.drinks.length){$('#app').innerHTML=LOADER;return}
+ if(!STORE.drinks.length){$('#app').innerHTML=LOADER();return}
  if(S.step==='machine'&&!D(S.o.drink))S.step='drink';
  const V={drink:drinkView,machine:machineView,cart:cartView,pay:payView,msgs:galleryView,wa:waView}[S.step]||landView;
  $('#app').innerHTML=topbar()+'<main>'+V()+'</main>';
@@ -488,7 +501,7 @@ const keepPay=()=>{const P=S.pay;lsSet('mm-pay',{name:P.name,phone:P.phone,addr:
 
 /* ================= data ================= */
 async function loadShop(){const r=await fetch('/api/shop',{cache:'no-store'});if(!r.ok)throw new Error('shop '+r.status);const j=await r.json();if(!EDIT)lsSet('mm-shop',j);return useShop(j)}
-function useShop(j){const before=JSON.stringify([STORE,OV]);STORE=j.menu;if(!EDIT)OV=j.texts||{};fixCart();if(S.o.drink&&!D(S.o.drink))S.o=newOrder(null);return before!==JSON.stringify([STORE,OV])}
+function useShop(j){const before=JSON.stringify([STORE,OV,BRAND]);STORE=j.menu;if(!EDIT)OV=j.texts||{};setBrand(j.brand);fixCart();if(S.o.drink&&!D(S.o.drink))S.o=newOrder(null);return before!==JSON.stringify([STORE,OV,BRAND])}
 
 /* ================= editor preview (index.html?edit=1 inside the admin's text editor) ================= */
 let EST='land';
@@ -529,7 +542,7 @@ if(!EDIT)setInterval(()=>{if(RM)return;const eyes=$$('.cup .ey, .logo .ey');eyes
 if(EDIT){loadShop().then(()=>parent.postMessage({mm:'ready'},location.origin)).catch(()=>{$('#app').innerHTML='<p class="oops">تعذّر تحميل المعاينة</p>'})}
 else{const cached=lsGet('mm-shop',null);
  if(cached&&cached.menu){useShop(cached);render()}else render();
- const fail=()=>{if(!STORE.drinks.length)$('#app').innerHTML=`<div class="loading"><div>${LOGO}<p>${esc(LANG==='ar'?'تعذّر فتح المحل. تأكد من الإنترنت وحدّث الصفحة.':'We couldn’t open the shop. Check your internet and refresh.')}</p></div></div>`};
+ const fail=()=>{if(!STORE.drinks.length)$('#app').innerHTML=`<div class="loading"><div>${logoHTML()}<p>${esc(LANG==='ar'?'تعذّر فتح المحل. تأكد من الإنترنت وحدّث الصفحة.':'We couldn’t open the shop. Check your internet and refresh.')}</p></div></div>`};
  loadShop().then(ch=>{if(ch&&!S.sending&&!holdActive){const y=scrollY;render();scrollTo(0,y)}}).catch(fail);
  sched()}
 }

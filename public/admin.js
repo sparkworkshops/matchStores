@@ -6,12 +6,15 @@ const ls={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.pa
 const clone=o=>JSON.parse(JSON.stringify(o));
 const money=n=>M.numStr(n)+' ر.س';
 const root=$('#root');
-const A={me:null,menu:null,texts:{},orders:null,seen:null,fresh:new Set(),filter:'all',olimit:30,page:'orders',dtab:'drinks',work:null,dirty:false};
+const A={me:null,menu:null,texts:{},orders:null,seen:null,fresh:new Set(),filter:'all',olimit:30,page:'orders',dtab:'drinks',work:null,dirty:false,brand:{},order:null,orderDirty:false};
 
 const I=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const ICO={orders:I('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>'),cup:I('<path d="M5 8h14l-1.5 12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/><path d="M4 8h16M13 8l2-6"/>'),
  text:I('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'),user:I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6 8-6s7 1.5 8 6"/>'),
- wa:I('<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9.5 9c0 3 2.5 5.5 5.5 5.5"/>'),check:I('<path d="M5 12.5l4.5 4.5L19 7"/>'),cam:I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>')};
+ wa:I('<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9.5 9c0 3 2.5 5.5 5.5 5.5"/>'),check:I('<path d="M5 12.5l4.5 4.5L19 7"/>'),cam:I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
+ help:I('<circle cx="12" cy="12" r="9.5"/><path d="M9.2 9.4a2.9 2.9 0 1 1 4 2.6c-.8.4-1.2 1-1.2 1.9v.3"/><path d="M12 17.3v.2"/>'),
+ sort:I('<path d="M8 4v16M4.5 7.5L8 4l3.5 3.5M16 20V4M12.5 16.5L16 20l3.5-3.5"/>'),
+ up:I('<path d="M6 15l6-6 6 6"/>'),down:I('<path d="M6 9l6 6 6-6"/>')};
 
 /* ---------- talking to the server ---------- */
 async function api(path,{method='GET',body,raw,type,keepalive}={}){
@@ -31,7 +34,7 @@ function ask({title,body,ok='تأكيد',cancel='إلغاء',danger}){return new
 
 /* ---------- login ---------- */
 function showLogin(){stopPoll();const setup=!!(A.me&&A.me.setup);
- root.innerHTML=`<div class="login"><form class="lbox" id="lf" novalidate>${M.catSVG(setup?'happy':'hi')}<h1>${setup?'أهلاً! أنشئ حساب المدير':'إدارة ماتشا موتشي'}</h1><p>${setup?'اختر اسم مستخدم وكلمة مرور. بتحتاجها كل مرة تدخل، فاحفظها في مكان آمن.':'اكتب اسم المستخدم وكلمة المرور'}</p>
+ root.innerHTML=`<div class="login"><form class="lbox" id="lf" novalidate>${M.catSVG(setup?'happy':'hi')}<h1>${setup?'أهلاً! أنشئ حساب المدير':'إدارة '+esc(M.bName(1))}</h1><p>${setup?'اختر اسم مستخدم وكلمة مرور. بتحتاجها كل مرة تدخل، فاحفظها في مكان آمن.':'اكتب اسم المستخدم وكلمة المرور'}</p>
 <label class="fld">اسم المستخدم<input name="user" autocomplete="username" autocapitalize="off" spellcheck="false" dir="auto"></label>
 <label class="fld">كلمة المرور<input name="pass" type="password" autocomplete="${setup?'new-password':'current-password'}" dir="ltr"></label>
 ${setup?'<label class="fld">اكتب كلمة المرور مرة ثانية<input name="pass2" type="password" autocomplete="new-password" dir="ltr"></label>':''}
@@ -50,14 +53,16 @@ ${setup?'<label class="fld">اكتب كلمة المرور مرة ثانية<inp
 /* ---------- shell + pages ---------- */
 const NAV=[['orders','الطلبات',ICO.orders],['drinks','المشروبات',ICO.cup],['texts','نصوص الموقع',ICO.text],['account','الحساب',ICO.user]];
 const navLinks=()=>NAV.map(([k,n,ic])=>`<a href="#${k}" data-nav="${k}">${ic}<span>${n}</span>${k==='orders'?'<span class="bd" data-bd></span>':''}</a>`).join('');
-function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.LOGO}<b>${esc(M.rawL('brand',1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" href="/" target="_blank" rel="noopener">افتح المتجر ↗</a></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks()}</nav>`}
+function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.logoHTML()}<b>${esc(M.bName(1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" href="/" target="_blank" rel="noopener">افتح المتجر ↗</a></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks()}</nav>`}
 const page=()=>$('#page');
 function route(){const h=location.hash.slice(1);A.page=NAV.some(n=>n[0]===h)?h:'orders';
  $$('[data-nav]').forEach(a=>{const on=a.dataset.nav===A.page;a.classList.toggle('on',on);on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current')});
  if(A.page!=='texts')leaveEditor();
  ({orders:renderOrders,drinks:renderDrinks,texts:renderTexts,account:renderAccount})[A.page]();scrollTo(0,0)}
 addEventListener('hashchange',()=>{if(A.me&&A.me.admin)route()});
-async function start(){const j=await api('shop');A.menu=j.menu;A.texts=j.texts||{};M.setTexts(A.texts);M.setMenu(A.menu);shell();route();loadOrders(true);startPoll()}
+async function start(){const j=await api('shop');A.menu=j.menu;A.texts=j.texts||{};A.brand=j.brand||{};M.setTexts(A.texts);M.setMenu(A.menu);M.setBrand(A.brand);shell();route();loadOrders(true);startPoll();
+ /* a new store: ask for its name and logo, then show how to add the first drink */
+ if(!A.brand.done)runWizard()}
 
 /* ================= orders ================= */
 let pollT=0;
@@ -70,7 +75,7 @@ async function loadOrders(quiet){try{const j=await api('orders');const before=JS
   if(fresh.length){fresh.forEach(o=>A.fresh.add(o.id));ding();toast(fresh.length===1?'وصل طلب جديد ♡':`وصلت ${fresh.length} طلبات جديدة ♡`)}
   badge();if(A.page==='orders'&&before!==JSON.stringify(A.orders))renderOrders()}
  catch(e){if(!quiet&&e.code!=='auth')toast(errMsg(e),true);if(A.page==='orders'&&!A.orders)renderOrders()}}
-function badge(){const n=(A.orders||[]).filter(o=>o.status==='new').length;$$('[data-bd]').forEach(b=>b.textContent=n||'');document.title=(n?`(${n}) `:'')+'إدارة ماتشا موتشي'}
+function badge(){const n=(A.orders||[]).filter(o=>o.status==='new').length;$$('[data-bd]').forEach(b=>b.textContent=n||'');document.title=(n?`(${n}) `:'')+'إدارة '+M.bName(1)}
 /* WhatsApp wants the number with its country code; Saudi numbers like 05x… become 9665x… */
 const waNum=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.length===10&&d.startsWith('05'))d='966'+d.slice(1);else if(d.length===9&&d.startsWith('5'))d='966'+d;return d.length>=10?d:''};
 const waURL=(o,k)=>{const n=waNum(o.phone);return n?`https://wa.me/${n}?text=${encodeURIComponent(M.waText(k,o))}`:''};
@@ -79,7 +84,7 @@ function when(iso){const d=new Date(iso),now=new Date(),y=new Date();y.setDate(n
 const an=x=>x?(x.ar||x.name):'';
 function orderCard(o){const done=o.status==='done',wo=waURL(o,'waOrder'),wr=waURL(o,'waReady');
  return `<article class="ocard ${done?'done':''} ${A.fresh.has(o.id)?'fresh':''}" aria-label="طلب ${esc(o.no)}">
- <div class="oh"><span class="ono">#MM-${esc(o.no)}</span><span class="otime">${when(o.createdAt)}</span><span class="ost ${done?'d':''}">${done?'تم ✓':'جديد'}</span></div>
+ <div class="oh"><span class="ono">${esc(M.orderNo(o.no))}</span><span class="otime">${when(o.createdAt)}</span><span class="ost ${done?'d':''}">${done?'تم ✓':'جديد'}</span></div>
  <div class="ocust"><span class="nm">${esc(o.name)}</span><a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>
  <span class="omode ${o.mode==='delivery'?'dl':''}">${o.mode==='delivery'?'توصيل: '+esc(o.addr):'استلام من المحل'}</span></div>
  <ul class="oitems">${o.items.map(it=>`<li><img src="${it.img||M.drinkArt({id:it.drink,color:it.color,under:it.under||''},0)}" alt=""><div><b><span class="q">×${it.qty}</span>${esc(an(it))}</b><span class="sz">${esc(an(it.size))}${it.milk?' · '+esc(an(it.milk)):''}</span>${it.addons&&it.addons.length?`<span class="ads">${it.addons.map(a=>`<span>${esc(an(a))}${a.q>1?' ×'+a.q:''}</span>`).join('')}</span>`:''}</div><span class="lp">${money(it.line)}</span></li>`).join('')}</ul>
@@ -109,62 +114,105 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b
 /* ================= drinks & menu ================= */
 const imgOf=d=>d.img||M.drinkArt(d,A.menu.drinks.indexOf(d)<0?0:A.menu.drinks.indexOf(d));
 const KIND=[['syrup','طبقة صوص'],['pearls','لآلئ / جيلي'],['foam','رغوة'],['topping','رشّات']];
+/* the sample drinks a new store starts with; the first drink the owner saves in the setup replaces them */
+const DEMO=['straw','classic','mango','sakura','coco','hoji'];
+const isDemo=()=>A.menu.drinks.every(d=>DEMO.includes(d.id));
+/* draw a cup the way the shop does, with a menu made up just for the drawing */
+function withMenu(m,f){M.setMenu(m);try{return f()}finally{M.setMenu(A.menu)}}
+function sampleCup({drink,addons=[],ad={},milks=[],milk=null,size='l'}={}){const d=drink||{id:'_s',color:'#9ccf5e',price:0};
+ return withMenu({drinks:[d],sizes:A.menu.sizes,milks,addons},()=>M.cupSVG({drink:d.id,size,milk,ad}))}
+const fromPrice=d=>{const ss=A.menu.sizes.filter(s=>(d.sizes||[]).includes(s.id));return (+d.price||0)+(ss.length?Math.min(...ss.map(s=>+s.add||0)):0)};
+const HELP={drinks:'كيف تضيف وترتّب المشروبات؟',addons:'كيف تستخدم الإضافات؟',milks:'كيف تستخدم أنواع الحليب؟',sizes:'كيف تستخدم الأحجام؟'};
+const helpBtn=k=>`<button class="helpb" data-d="help">${ICO.help}<span><b>${HELP[k]}</b><small>اضغط هنا ونشرح لك كل شي خطوة بخطوة</small></span><i aria-hidden="true">←</i></button>`;
 function renderDrinks(){const p=page(),tab=A.dtab;
- p.innerHTML=`<div class="ph1"><h1>المشروبات والقائمة</h1><div class="seg2" role="group" aria-label="القسم">${[['drinks','المشروبات'],['addons','الإضافات'],['milks','الحليب'],['sizes','الأحجام']].map(([k,l])=>`<button class="${tab===k?'on':''}" aria-pressed="${tab===k}" data-d="tab" data-v="${k}">${l}</button>`).join('')}</div><p>${tab==='drinks'?'اضغط على أي مشروب عشان تعدّله، أو أضف مشروب جديد.':'عدّل اللي تبي، وبعدين اضغط «حفظ التغييرات».'}</p></div><div id="dpane"></div>`;
+ p.innerHTML=`<div class="ph1"><h1>المشروبات والقائمة</h1><div class="seg2" role="group" aria-label="القسم">${[['drinks','المشروبات'],['addons','الإضافات'],['milks','الحليب'],['sizes','الأحجام']].map(([k,l])=>`<button class="${tab===k?'on':''}" aria-pressed="${tab===k}" data-d="tab" data-v="${k}">${l}</button>`).join('')}</div><p>${tab==='drinks'?'اضغط على أي مشروب عشان تعدّله، أو أضف مشروب جديد. الرقم على كل مشروب هو مكانه في المنيو.':'عدّل اللي تبي، وبعدين اضغط «حفظ التغييرات».'}</p></div>${helpBtn(tab)}<div id="dpane"></div>`;
  tab==='drinks'?drinksPane():listPane(tab)}
 function drinkSummary(d){const sz=A.menu.sizes.filter(s=>d.sizes.includes(s.id)).map(s=>esc(s.ar||s.name)).join('، ');
  const ads=d.addonMode!=='some'?'كل الإضافات':!d.addons.length?'بدون إضافات':(()=>{const n=d.addons.map(id=>A.menu.addons.find(a=>a.id===id)).filter(Boolean).map(a=>esc(a.ar||a.name));return 'إضافات محددة: '+n.slice(0,3).join('، ')+(n.length>3?` و${n.length-3} غيرها`:'')})();
  return `الأحجام: ${sz}<br>${ads}`}
-function drinksPane(){$('#dpane').innerHTML=`<div class="dgrid">${A.menu.drinks.map((d,i)=>`<button class="dcard" data-d="open" data-v="${d.id}"><img src="${imgOf(d)}" alt=""><span><h3>${esc(d.ar||d.name)}</h3><span class="en">${esc(d.name)}</span><span class="pr">${money(d.price)}</span><span class="sm" style="display:block">${drinkSummary(d)}</span><span class="ed">تعديل</span></span></button>`).join('')}<button class="dnew" data-d="open" data-v="">+ مشروب جديد</button></div>`}
+function drinksPane(){if(A.order)return orderPane();
+ $('#dpane').innerHTML=`<div class="dtools"><button class="btn" data-d="sort" ${A.menu.drinks.length<2?'disabled':''}>${ICO.sort}ترتيب المشروبات</button></div>
+<div class="dgrid">${A.menu.drinks.map((d,i)=>`<button class="dcard" data-d="open" data-v="${d.id}"><span class="dimg"><img src="${imgOf(d)}" alt=""><span class="dnum" aria-label="رقم ${i+1} في المنيو">${i+1}</span></span><span><h3>${esc(d.ar||d.name)}</h3><span class="en">${esc(d.name)}</span><span class="pr">${money(d.price)}</span><span class="sm" style="display:block">${drinkSummary(d)}</span><span class="ed">تعديل</span></span></button>`).join('')}<button class="dnew" data-d="open" data-v="">+ مشروب جديد</button></div>`}
 
-/* --- one drink, in a sheet --- */
-function openDrink(id){const src=A.menu.drinks.find(d=>d.id===id),isNew=!src;
+/* --- the order of the drinks in the menu: arrows, or drag by the handle --- */
+function orderPane(){const ds=A.order.map(id=>A.menu.drinks.find(d=>d.id===id)).filter(Boolean),n=ds.length;
+ $('#dpane').innerHTML=`<div class="ordbox"><h2>${ICO.sort}رتّب المشروبات</h2><p class="hint">المشروب رقم 1 يطلع أول واحد في المنيو عند العميل، وأول 3 مشروبات تطلع في الصفحة الرئيسية. اضغط الأسهم ▲▼، أو امسك ⠿ واسحب المشروب لمكانه.</p>
+<ol class="olist2" id="olist2">${ds.map((d,i)=>`<li class="orow ${i<3?'top3':''}" data-id="${d.id}"><span class="grip" title="اسحب من هنا">⠿</span><span class="onum">${i+1}</span><img src="${imgOf(d)}" alt=""><b>${esc(d.ar||d.name)}${i<3?'<small>يطلع في الصفحة الرئيسية</small>':''}</b><span class="oarr"><button class="btn ic" data-d="mv" data-v="${i}:-1" aria-label="${esc(d.ar||d.name)}: فوق" ${i?'':'disabled'}>${ICO.up}</button><button class="btn ic" data-d="mv" data-v="${i}:1" aria-label="${esc(d.ar||d.name)}: تحت" ${i<n-1?'':'disabled'}>${ICO.down}</button></span></li>`).join('')}</ol>
+<div class="savebar"><span>${A.orderDirty?'الترتيب تغيّر وما انحفظ بعد':'غيّر الترتيب، وبعدين اضغط حفظ'}</span><button class="btn" data-d="sortcancel">إلغاء</button><button class="btn p" data-d="sortsave" ${A.orderDirty?'':'disabled'}>حفظ الترتيب</button></div></div>`}
+function moveDrink(i,dir){const j=i+dir;if(j<0||j>=A.order.length)return;[A.order[i],A.order[j]]=[A.order[j],A.order[i]];A.orderDirty=true;orderPane();
+ const r=$$('.orow')[j];if(r){r.classList.add('moved');($(`[data-v="${j}:${dir}"]:not([disabled])`,r)||$(`[data-v="${j}:${-dir}"]`,r))?.focus()}}
+let drag=null;
+document.addEventListener('pointerdown',e=>{const g=e.target.closest('.orow .grip');if(!g)return;e.preventDefault();const row=g.closest('.orow');drag={row,list:row.parentElement,id:e.pointerId};row.classList.add('lift');try{g.setPointerCapture(e.pointerId)}catch(x){}});
+document.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;const y=e.clientY;let before=null;
+ for(const r of drag.list.children){if(r===drag.row)continue;const b=r.getBoundingClientRect();if(y<b.top+b.height/2){before=r;break}}
+ if(drag.row.nextElementSibling!==before&&before!==drag.row)drag.list.insertBefore(drag.row,before);
+ $$('.onum',drag.list).forEach((x,i)=>x.textContent=i+1);
+ if(y<90)scrollBy(0,-10);else if(y>innerHeight-160)scrollBy(0,10)});
+const endDrag=e=>{if(!drag||e.pointerId!==drag.id)return;const ids=[...drag.list.children].map(r=>r.dataset.id),row=drag.row;drag=null;row.classList.remove('lift');
+ if(ids.join()!==A.order.join()){A.order=ids;A.orderDirty=true}orderPane()};
+document.addEventListener('pointerup',endDrag);document.addEventListener('pointercancel',endDrag);
+
+/* --- one drink, in a sheet. opts.guided: the first-drink walkthrough; opts.onDone(savedDrink|null) --- */
+function openDrink(id,opts={}){const src=A.menu.drinks.find(d=>d.id===id),isNew=!src,guided=!!opts.guided;
  const d=src?clone(src):{id:'d'+Date.now().toString(36),name:'',ar:'',desc:'',descAr:'',price:20,color:'#9ccf5e',img:'',sizes:A.menu.sizes.map(s=>s.id),addonMode:'all',addons:[]};
- const start=JSON.stringify(d);let busy=false;
+ const start=JSON.stringify(d);let busy=false,T=null;
  const sh=document.createElement('div');sh.className='sheet';document.body.appendChild(sh);document.body.style.overflow='hidden';
- const close=async force=>{if(!force&&JSON.stringify(d)!==start&&!(await ask({title:'تطلع بدون حفظ؟',body:'التعديلات على هذا المشروب بتضيع.',ok:'اطلع بدون حفظ',cancel:'ارجع',danger:true})))return;sh.remove();document.body.style.overflow='';removeEventListener('keydown',kd)};
- const kd=e=>{if(e.key==='Escape'&&!$('.modal'))close()};addEventListener('keydown',kd);
- const draw=()=>{sh.innerHTML=`<div class="sbox" role="dialog" aria-modal="true" aria-labelledby="sh"><div class="shd"><h2 id="sh">${isNew?'مشروب جديد':'تعديل: '+esc(d.ar||d.name)}</h2><button class="btn" data-s="close" aria-label="إغلاق">✕</button></div>
+ const close=async(force,saved)=>{if(!force&&JSON.stringify(d)!==start&&!(await ask({title:'تطلع بدون حفظ؟',body:'التعديلات على هذا المشروب بتضيع.',ok:'اطلع بدون حفظ',cancel:'ارجع',danger:true})))return;T?.end();sh.remove();document.body.style.overflow='';removeEventListener('keydown',kd);opts.onDone?.(saved||null)};
+ const kd=e=>{if(e.key==='Escape'&&!$('.modal')&&!$('.tour'))close()};addEventListener('keydown',kd);
+ const pv=()=>{const q=s=>$(s,sh);if(!q('#pv-name'))return;const n=d.ar.trim()||d.name.trim();q('#pv-name').textContent=n||'اسم المشروب';q('#pv-name').classList.toggle('ph',!n);
+  q('#pv-desc').textContent=d.descAr.trim()||d.desc.trim();q('#pv-img').src=d.img||M.drinkArt(d,0);q('#pv-price').textContent=money(fromPrice(d));
+  const m0=A.menu.milks.find(m=>m.color);q('#pv-cup').innerHTML=sampleCup({drink:d,milks:m0?[m0]:[],milk:m0?.id||null})};
+ const draw=()=>{sh.innerHTML=`<div class="sbox" role="dialog" aria-modal="true" aria-labelledby="sh"><div class="shd"><h2 id="sh">${guided?'أول مشروب لك ♡':isNew?'مشروب جديد':'تعديل: '+esc(d.ar||d.name)}</h2>${guided?'':'<button class="btn" data-s="tour" aria-label="اشرح لي هذي الصفحة">'+ICO.help+'<span class="hide-s">شرح</span></button>'}<button class="btn" data-s="close" aria-label="إغلاق">✕</button></div>
 <div class="sbd">
-<section class="sec"><h3><i>1</i>الصورة</h3><p class="hint">تظهر للعملاء في المنيو وفي السلة.</p><div class="phrow"><img id="dimg" src="${d.img||M.drinkArt(d,0)}" alt="صورة المشروب"><div class="pc"><label class="btn">${ICO.cam}<span>${d.img?'تغيير الصورة':'اختر صورة'}</span><input type="file" accept="image/*" id="dfile" class="hide"></label>${d.img?'<button class="lnk mut" data-s="noimg">شيل الصورة واستخدم الرسمة</button>':'<span class="hint" style="margin:0">بدون صورة، يظهر كوب مرسوم بلون المشروب</span>'}<span class="hint" id="dup" style="margin:0"></span></div></div></section>
-<section class="sec"><h3><i>2</i>الاسم والسعر</h3><div class="g2" style="margin-top:8px">
- <label class="fld">الاسم بالعربي<input data-f="ar" value="${esc(d.ar)}" dir="rtl" maxlength="60"></label>
- <label class="fld">الاسم بالإنجليزي<input data-f="name" value="${esc(d.name)}" dir="ltr" maxlength="60"></label>
+<section class="sec dprev" id="dprev"><h3>كيف يشوفه العميل</h3><p class="hint">يتغيّر على طول وأنت تعدّل تحت</p><div class="pvrow"><figure><div class="pvcard"><img id="pv-img" alt=""><div class="pvinfo"><b id="pv-name"></b><span id="pv-desc"></span><span class="price" id="pv-price"></span></div></div><figcaption>في المنيو</figcaption></figure><figure><div class="pvcup" id="pv-cup"></div><figcaption>لما يختاره ويحضّره</figcaption></figure></div></section>
+<section class="sec" id="sec-photo"><h3><i>1</i>الصورة</h3><p class="hint">تظهر للعملاء في المنيو وفي السلة.</p><div class="phrow"><img id="dimg" src="${d.img||M.drinkArt(d,0)}" alt="صورة المشروب"><div class="pc"><label class="btn">${ICO.cam}<span>${d.img?'تغيير الصورة':'اختر صورة'}</span><input type="file" accept="image/*" id="dfile" class="hide"></label>${d.img?'<button class="lnk mut" data-s="noimg">شيل الصورة واستخدم الرسمة</button>':'<span class="hint" style="margin:0">بدون صورة، يظهر كوب مرسوم بلون المشروب</span>'}<span class="hint" id="dup" style="margin:0"></span></div></div></section>
+<section class="sec" id="sec-name"><h3><i>2</i>الاسم والسعر</h3><div class="g2" style="margin-top:8px">
+ <label class="fld">الاسم بالعربي<input data-f="ar" value="${esc(d.ar)}" dir="rtl" maxlength="60" placeholder="مثال: ماتشا لاتيه"></label>
+ <label class="fld">الاسم بالإنجليزي<input data-f="name" value="${esc(d.name)}" dir="ltr" maxlength="60" placeholder="e.g. Matcha Latte"></label>
  <label class="fld">وصف قصير بالعربي<input data-f="descAr" value="${esc(d.descAr)}" dir="rtl" maxlength="160"></label>
  <label class="fld">وصف قصير بالإنجليزي<input data-f="desc" value="${esc(d.desc)}" dir="ltr" maxlength="160"></label>
  <label class="fld">السعر الأساسي (ر.س)<input data-f="price" type="number" min="0" step="0.5" inputmode="decimal" value="${d.price}" dir="ltr"></label>
  <label class="fld">لون المشروب<span class="colr"><input type="color" data-f="color" value="${d.color}"><span class="hint" style="margin:0">لون الكوب المرسوم</span></span></label>
 </div><p class="lerr" id="dnerr"></p></section>
-<section class="sec"><h3><i>3</i>الأحجام المتوفرة</h3><p class="hint">العميل يشوف بس الأحجام اللي عليها صح.</p><div class="sizes">${A.menu.sizes.map((s,i)=>`<label class="tog"><input type="checkbox" data-size="${s.id}" ${d.sizes.includes(s.id)?'checked':''}><span class="tk">✓</span><span class="mini-cup" style="width:${14+i*4}px;height:${16+i*6}px"></span>${esc(s.ar||s.name)}<small>${s.add?'+'+money(s.add):'بدون زيادة'}</small></label>`).join('')}</div><p class="lerr" id="dserr"></p></section>
-<section class="sec"><h3><i>4</i>الإضافات</h3><p class="hint">وش الإضافات اللي يقدر العميل يحطها في هذا المشروب؟</p><div class="rad"><label><input type="radio" name="am" value="all" ${d.addonMode!=='some'?'checked':''}><span>كل الإضافات مسموحة<small>وأي إضافة جديدة تضيفها بعدين</small></span></label><label><input type="radio" name="am" value="some" ${d.addonMode==='some'?'checked':''}><span>إضافات محددة فقط<small>تختارها من القائمة</small></span></label></div>
+<section class="sec" id="sec-sizes"><h3><i>3</i>الأحجام المتوفرة</h3><p class="hint">العميل يشوف بس الأحجام اللي عليها صح.</p><div class="sizes">${A.menu.sizes.map((s,i)=>`<label class="tog"><input type="checkbox" data-size="${s.id}" ${d.sizes.includes(s.id)?'checked':''}><span class="tk">✓</span><span class="mini-cup" style="width:${14+i*4}px;height:${16+i*6}px"></span>${esc(s.ar||s.name)}<small>${s.add?'+'+money(s.add):'بدون زيادة'}</small></label>`).join('')}</div><p class="lerr" id="dserr"></p></section>
+<section class="sec" id="sec-addons"><h3><i>4</i>الإضافات</h3><p class="hint">وش الإضافات اللي يقدر العميل يحطها في هذا المشروب؟</p><div class="rad"><label><input type="radio" name="am" value="all" ${d.addonMode!=='some'?'checked':''}><span>كل الإضافات مسموحة<small>وأي إضافة جديدة تضيفها بعدين</small></span></label><label><input type="radio" name="am" value="some" ${d.addonMode==='some'?'checked':''}><span>إضافات محددة فقط<small>تختارها من القائمة</small></span></label></div>
 <div id="alw" class="${d.addonMode==='some'?'':'hide'}"><div class="arow2"><button type="button" class="lnk" data-s="all">تحديد الكل</button><button type="button" class="lnk mut" data-s="none">إلغاء الكل</button></div><div class="alist">${A.menu.addons.map(a=>`<label><input type="checkbox" data-ad="${a.id}" ${d.addons.includes(a.id)?'checked':''}>${M.icon(a,40)}<span>${esc(a.ar||a.name)}<small>+${money(a.price)}</small></span></label>`).join('')}</div><p class="hint" id="anone" style="margin-top:8px">${d.addons.length?'':'ما اخترت ولا إضافة، فالعميل ما بيشوف المضخات لهذا المشروب.'}</p></div></section>
 </div>
-<div class="sft"><button class="btn p" data-s="save">حفظ المشروب</button><button class="btn" data-s="close">إلغاء</button>${isNew?'':'<button class="lnk red" data-s="del">حذف المشروب</button>'}</div></div>`};
+<div class="sft"><button class="btn p" data-s="save">حفظ المشروب</button><button class="btn" data-s="close">إلغاء</button>${isNew?'':'<button class="lnk red" data-s="del">حذف المشروب</button>'}</div></div>`;pv()};
  draw();
  sh.addEventListener('input',e=>{const t=e.target;
-  if(t.dataset.f){d[t.dataset.f]=t.dataset.f==='price'?Math.max(0,parseFloat(t.value)||0):t.value;if(t.dataset.f==='color'&&!d.img)$('#dimg',sh).src=M.drinkArt(d,0)}
-  if(t.dataset.size){d.sizes=A.menu.sizes.map(s=>s.id).filter(id=>$(`[data-size="${id}"]`,sh).checked);$('#dserr',sh).textContent=d.sizes.length?'':'لازم تختار حجم واحد على الأقل'}
+  if(t.dataset.f){d[t.dataset.f]=t.dataset.f==='price'?Math.max(0,parseFloat(t.value)||0):t.value;if(t.dataset.f==='color'&&!d.img)$('#dimg',sh).src=M.drinkArt(d,0);pv()}
+  if(t.dataset.size){d.sizes=A.menu.sizes.map(s=>s.id).filter(id=>$(`[data-size="${id}"]`,sh).checked);$('#dserr',sh).textContent=d.sizes.length?'':'لازم تختار حجم واحد على الأقل';pv()}
   if(t.name==='am'){d.addonMode=t.value;$('#alw',sh).classList.toggle('hide',t.value!=='some')}
   if(t.dataset.ad){d.addons=$$('[data-ad]',sh).filter(x=>x.checked).map(x=>x.dataset.ad);$('#anone',sh).textContent=d.addons.length?'':'ما اخترت ولا إضافة، فالعميل ما بيشوف المضخات لهذا المشروب.'}});
  sh.addEventListener('change',async e=>{const t=e.target;if(t.id!=='dfile'||!t.files[0])return;const up=$('#dup',sh);up.textContent='جاري رفع الصورة…';busy=true;
-  try{const blob=await shrink(t.files[0]);const j=await api('images',{method:'POST',raw:blob,type:'image/jpeg'});d.img=j.url;draw()}
+  try{const blob=await shrink(t.files[0]);const j=await api('images',{method:'POST',raw:blob,type:'image/jpeg'});d.img=j.url;const y=$('.sbd',sh).scrollTop;draw();$('.sbd',sh).scrollTop=y;T?.place()}
   catch(x){up.textContent=x.code==='img'?'ما قدرنا نقرأ هالملف كصورة':errMsg(x)}finally{busy=false}});
  sh.addEventListener('click',async e=>{if(e.target===sh)return close();const b=e.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
   if(s==='close')close();
-  if(s==='noimg'){d.img='';draw()}
+  if(s==='tour'){T=tour(drinkSteps(sh))}
+  if(s==='noimg'){d.img='';draw();T?.place()}
   if(s==='all'||s==='none'){$$('[data-ad]',sh).forEach(x=>x.checked=s==='all');d.addons=s==='all'?A.menu.addons.map(a=>a.id):[];$('#anone',sh).textContent=d.addons.length?'':'ما اخترت ولا إضافة، فالعميل ما بيشوف المضخات لهذا المشروب.'}
   if(s==='del'){if(A.menu.drinks.length<=1){toast('لازم يبقى مشروب واحد على الأقل',true);return}
    if(!(await ask({title:'حذف '+(d.ar||d.name)+'؟',body:'المشروب بيختفي من المنيو. الطلبات القديمة تبقى زي ما هي.',ok:'احذف',danger:true})))return;
    const m=clone(A.menu);m.drinks=m.drinks.filter(x=>x.id!==d.id);if(await saveMenu(m,'تم حذف المشروب'))close(true)}
   if(s==='save'){if(busy){toast('انتظر لين يخلص رفع الصورة');return}
-   if(!d.ar.trim()&&!d.name.trim()){$('#dnerr',sh).textContent='اكتب اسم المشروب';$('[data-f=ar]',sh).focus();return}
-   if(!d.sizes.length){$('#dserr',sh).textContent='لازم تختار حجم واحد على الأقل';return}
+   if(!d.ar.trim()&&!d.name.trim()){T?.end();$('#dnerr',sh).textContent='اكتب اسم المشروب';$('[data-f=ar]',sh).focus();return}
+   if(!d.sizes.length){T?.end();$('#dserr',sh).textContent='لازم تختار حجم واحد على الأقل';return}
    if(!d.name.trim())d.name=d.ar;if(!d.ar.trim())d.ar=d.name;
-   const m=clone(A.menu),i=m.drinks.findIndex(x=>x.id===d.id);if(i<0)m.drinks.push(d);else m.drinks[i]=d;
-   b.disabled=true;if(await saveMenu(m,isNew?'تمت إضافة المشروب ✓ وصار يظهر للعملاء':'تم الحفظ ✓ والعملاء يشوفون التغيير الحين'))close(true);else b.disabled=false}});
- setTimeout(()=>$('[data-f=ar]',sh)?.focus({preventScroll:true}),50)}
+   const m=clone(A.menu),i=m.drinks.findIndex(x=>x.id===d.id);
+   /* the store's first own drink takes the place of the sample drinks */
+   if(guided&&isNew&&isDemo())m.drinks=[d];else if(i<0)m.drinks.push(d);else m.drinks[i]=d;
+   b.disabled=true;if(await saveMenu(m,isNew?'تمت إضافة المشروب ✓ وصار يظهر للعملاء':'تم الحفظ ✓ والعملاء يشوفون التغيير الحين'))close(true,d);else b.disabled=false}});
+ if(guided)setTimeout(()=>{if(sh.isConnected)T=tour(drinkSteps(sh))},380);
+ else setTimeout(()=>$('[data-f=ar]',sh)?.focus({preventScroll:true}),50)}
 /* photos are cropped to the menu card shape and kept small */
-function shrink(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onerror=()=>rej({code:'img'});fr.onload=()=>{const im=new Image();im.onerror=()=>rej({code:'img'});im.onload=()=>{const W=600,H=720,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);const s=Math.max(W/im.width,H/im.height),w=im.width*s,h=im.height*s;x.drawImage(im,(W-w)/2,(H-h)/2,w,h);c.toBlob(b=>b?res(b):rej({code:'img'}),'image/jpeg',.85)};im.src=fr.result};fr.readAsDataURL(file)})}
+const readImg=file=>new Promise((res,rej)=>{const fr=new FileReader();fr.onerror=()=>rej({code:'img'});fr.onload=()=>{const im=new Image();im.onerror=()=>rej({code:'img'});im.onload=()=>res(im);im.src=fr.result};fr.readAsDataURL(file)});
+async function shrink(file){const im=await readImg(file);const W=600,H=720,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);const s=Math.max(W/im.width,H/im.height),w=im.width*s,h=im.height*s;x.drawImage(im,(W-w)/2,(H-h)/2,w,h);
+ return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej({code:'img'}),'image/jpeg',.85))}
+/* logos keep their whole shape and any see-through background */
+async function shrinkLogo(file){const im=await readImg(file);const S=256,c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d'),s=Math.min(S/im.width,S/im.height),w=im.width*s,h=im.height*s;x.drawImage(im,(S-w)/2,(S-h)/2,w,h);
+ return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej({code:'img'}),'image/png'))}
 async function saveMenu(m,ok){try{const j=await api('menu',{method:'PUT',body:m});A.menu=j.menu;M.setMenu(A.menu);if(A.page==='drinks'&&A.dtab==='drinks')drinksPane();toast(ok);return true}catch(e){if(e.code!=='auth')toast(errMsg(e),true);return false}}
 
 /* --- add-ons, milks and sizes: edit in place, then one save --- */
@@ -173,7 +221,7 @@ function listPane(kind){const W=A.work||(A.work=clone(A.menu)),rows=W[kind];
  const f=(i,k,label,type='text',extra='')=>`<label class="fld">${label}<input data-w="${kind}:${i}:${k}" type="${type}" value="${esc(type==='color'?(rows[i][k]||'#ffffff'):rows[i][k])}" ${extra}></label>`;
  $('#dpane').innerHTML=`<div class="rows">${rows.map((x,i)=>`<div class="irow"><span class="pv" id="pv-${i}">${pv(x,i)}</span><div><div class="g2">
  ${f(i,'ar','الاسم بالعربي','text','dir="rtl" maxlength="60"')}${f(i,'name','الاسم بالإنجليزي','text','dir="ltr" maxlength="60"')}
- ${kind==='addons'?f(i,'price','السعر (ر.س)','number','min="0" step="0.5" inputmode="decimal" dir="ltr"'):f(i,'add',kind==='sizes'?'زيادة على السعر (ر.س)':'زيادة على السعر (ر.س)','number','min="0" step="0.5" inputmode="decimal" dir="ltr"')}
+ ${kind==='addons'?f(i,'price','السعر (ر.س)','number','min="0" step="0.5" inputmode="decimal" dir="ltr"'):f(i,'add','زيادة على السعر (ر.س)','number','min="0" step="0.5" inputmode="decimal" dir="ltr"')}
  ${kind!=='sizes'?`<label class="fld">اللون<span class="colr"><input type="color" data-w="${kind}:${i}:color" value="${x.color||'#ffffff'}"></span></label>`:''}
  ${kind==='addons'?`<label class="fld">الشكل في الكوب<select data-w="${kind}:${i}:kind">${KIND.map(([v,l])=>`<option value="${v}" ${x.kind===v?'selected':''}>${l}</option>`).join('')}</select></label>`:''}
  </div></div>${kind!=='sizes'?`<button class="lnk red del" data-d="rm" data-v="${i}">حذف</button>`:''}</div>`).join('')}</div>
@@ -187,12 +235,175 @@ document.addEventListener('change',e=>{if(e.target.dataset.w)e.target.dispatchEv
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-d]');if(!b||!$('#page')?.contains(b))return;const a=b.dataset.d,v=b.dataset.v;
  if(a==='tab'){A.dtab=v;renderDrinks()}
  if(a==='open')openDrink(v);
+ if(a==='help')tour(helpSteps(A.dtab));
+ if(a==='sort'){A.order=A.menu.drinks.map(d=>d.id);A.orderDirty=false;drinksPane();$('.ordbox')?.scrollIntoView({block:'start',behavior:'smooth'})}
+ if(a==='mv'){const[i,dir]=v.split(':').map(Number);moveDrink(i,dir)}
+ if(a==='sortcancel'){A.order=null;A.orderDirty=false;drinksPane()}
+ if(a==='sortsave'){b.disabled=true;const m=clone(A.menu),by=Object.fromEntries(m.drinks.map(d=>[d.id,d]));
+  m.drinks=[...A.order.map(id=>by[id]).filter(Boolean),...m.drinks.filter(d=>!A.order.includes(d.id))];
+  const keep=[A.order,A.orderDirty];A.order=null;A.orderDirty=false;
+  if(!(await saveMenu(m,'تم حفظ الترتيب ✓ والمنيو صار بالترتيب الجديد'))){[A.order,A.orderDirty]=keep;drinksPane()}}
  if(a==='rm'){const k=A.dtab;if(A.work[k].length<=1&&k==='milks'){toast('خلّ نوع حليب واحد على الأقل',true);return}A.work[k].splice(+v,1);markDirty();listPane(k)}
  if(a==='addrow'){const k=A.dtab,id='x'+Date.now().toString(36);A.work[k].push(k==='addons'?{id,name:'New treat',ar:'إضافة جديدة',price:3,color:'#c9b3ff',kind:'topping'}:{id,name:'New milk',ar:'حليب جديد',add:2,color:'#f5ecd9'});markDirty();listPane(k);const r=$$('.irow').pop();r?.scrollIntoView({block:'center'});r?.querySelector('input')?.select()}
  if(a==='undo'){A.work=null;A.dirty=false;listPane(A.dtab)}
  if(a==='savework'){b.disabled=true;const m=clone(A.menu);for(const k of ['addons','milks','sizes'])m[k]=A.work[k];
   if(await saveMenu(m,'تم الحفظ ✓')){A.work=null;A.dirty=false;listPane(A.dtab)}else b.disabled=false}});
-addEventListener('beforeunload',e=>{if(A.dirty){e.preventDefault();e.returnValue=''}});
+addEventListener('beforeunload',e=>{if(A.dirty||A.orderDirty){e.preventDefault();e.returnValue=''}});
+
+/* ================= guided tours =================
+   One thing on the page is lit up at a time, everything else is dimmed, and a speech bubble explains it.
+   The lit-up part still works, so the owner can try it while reading. */
+function tour(steps){let i=0,tgt=null;$$('.tour').forEach(x=>x.remove());
+ const ov=document.createElement('div');ov.className='tour';
+ ov.innerHTML='<div class="tblock"></div><div class="tspot"></div><div class="tbub" role="dialog" aria-modal="true" aria-labelledby="tbt"></div>';
+ document.body.appendChild(ov);const blk=ov.children[0],spot=ov.children[1],bub=ov.children[2];
+ const find=()=>{const s=steps[i];let el=typeof s.el==='function'?s.el():s.el?$(s.el):null;if(Array.isArray(el)){el=el.filter(Boolean);if(!el.length)el=null}return el};
+ const rectOf=el=>{const rs=(Array.isArray(el)?el:[el]).map(x=>x.getBoundingClientRect());return {left:Math.min(...rs.map(r=>r.left)),top:Math.min(...rs.map(r=>r.top)),right:Math.max(...rs.map(r=>r.right)),bottom:Math.max(...rs.map(r=>r.bottom))}};
+ const alive=el=>el&&(Array.isArray(el)?el.every(x=>x.isConnected):el.isConnected);
+ const place=()=>{if(!ov.isConnected)return;if(tgt&&!alive(tgt))tgt=find();const vw=innerWidth,vh=innerHeight,W=Math.min(440,vw-20);bub.style.width=W+'px';const bh=bub.offsetHeight;
+  if(!tgt){spot.style.display='none';blk.style.clipPath='';blk.classList.add('dim');bub.style.left=(vw-W)/2+'px';bub.style.top=Math.max(10,(vh-bh)/2)+'px';return}
+  const r=rectOf(tgt),p=8,x1=Math.max(4,r.left-p),y1=Math.max(4,r.top-p),x2=Math.min(vw-4,r.right+p),y2=Math.min(vh-4,r.bottom+p);
+  blk.classList.remove('dim');spot.style.display='block';Object.assign(spot.style,{left:x1+'px',top:y1+'px',width:Math.max(0,x2-x1)+'px',height:Math.max(0,y2-y1)+'px'});
+  blk.style.clipPath=`polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${x1}px ${y1}px,${x2}px ${y1}px,${x2}px ${y2}px,${x1}px ${y2}px,${x1}px ${y1}px)`;
+  bub.style.left=Math.max(10,Math.min(vw-W-10,(x1+x2)/2-W/2))+'px';
+  const below=vh-y2-14,above=y1-14;bub.style.top=(below>=bh?y2+12:above>=bh?y1-12-bh:below>=above?vh-bh-10:10)+'px'};
+ const show=()=>{const s=steps[i],last=i===steps.length-1;tgt=find();
+  bub.innerHTML=`<button class="tx" data-tr="end" aria-label="إغلاق الشرح">✕</button><div class="thd">${M.catSVG(last?'happy':'hi')}<span class="tcount">${steps.length>1?`${i+1} من ${steps.length}`:'شرح'}</span></div><h3 id="tbt">${s.title}</h3><div class="tbody">${s.body}</div>
+<div class="tdots" aria-hidden="true">${steps.length>1?steps.map((x,j)=>`<i class="${j===i?'on':j<i?'done':''}"></i>`).join(''):''}</div>
+<div class="tnav">${i?'<button class="btn" data-tr="prev">→ السابق</button>':''}${(s.extra||[]).map((x,j)=>`<button class="btn ${x.p?'p':''}" data-tr="x${j}">${x.label}</button>`).join('')}<button class="btn ${s.extra?'':'p'}" data-tr="next">${last?(s.finish||'تمام، فهمت ✓'):'التالي ←'}</button></div>`;
+  bub.style.width=Math.min(440,innerWidth-20)+'px';
+  if(tgt){const el0=Array.isArray(tgt)?tgt[0]:tgt,me=i,r=rectOf(tgt);
+   /* bring it near the top so the bubble fits underneath it, unless it is too tall for that */
+   const block=s.block||(r.bottom-r.top+bub.offsetHeight+120<=innerHeight?'start':'center');
+   el0.style.scrollMarginTop='84px';el0.scrollIntoView({block,behavior:'smooth'});
+   /* if the smooth scroll got cut short, jump there */
+   setTimeout(()=>{if(i!==me||!el0.isConnected)return;const r=rectOf(tgt),b=bub.getBoundingClientRect(),hidden=r.bottom<0||r.top>innerHeight-60,covered=block==='start'&&r.top<b.bottom&&r.bottom>b.top;
+    if(hidden||covered){el0.scrollIntoView({block});place()}},650)}
+  place();setTimeout(place,350);setTimeout(place,700);bub.querySelector('[data-tr=next]').focus({preventScroll:true})};
+ const end=()=>{if(!ov.isConnected)return;ov.remove();removeEventListener('resize',place);removeEventListener('scroll',place,true);removeEventListener('keydown',kd,true)};
+ const kd=e=>{if(e.key==='Escape'){e.stopPropagation();end()}};
+ addEventListener('resize',place);addEventListener('scroll',place,true);addEventListener('keydown',kd,true);
+ bub.addEventListener('click',e=>{const b=e.target.closest('[data-tr]');if(!b)return;const a=b.dataset.tr;
+  if(a==='end')end();if(a==='prev'&&i>0){i--;show()}
+  if(a==='next'){if(i<steps.length-1){i++;show()}else end()}
+  if(a[0]==='x'){const x=steps[i].extra[+a.slice(1)];end();x.fn()}});
+ /* a tap on the dimmed part gives the bubble a little shake, so it's clear where to look */
+ blk.addEventListener('click',()=>bub.animate([{transform:'translateX(0)'},{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:260}));
+ show();return {end,place}}
+const fldOf=sel=>()=>$(sel)?.closest('.fld');
+const fldsOf=(...sels)=>()=>sels.map(s=>$(s)?.closest('.fld'));
+/* what a sample add-on looks like inside a cup, for each "shape" */
+function kindDemo(){const W=A.work||A.menu,DC={syrup:'#f47a8c',pearls:'#6b4226',foam:'#fff4e2',topping:'#ffd6e3'};
+ return `<div class="kdemo">${KIND.map(([k,l])=>{const a=W.addons.find(x=>x.kind===k)||{id:'_k',name:'',ar:'',price:0,color:DC[k]};const ad={...a,id:'_k',kind:k};
+  return `<figure>${sampleCup({addons:[ad],ad:{_k:2}})}<figcaption>${l}</figcaption></figure>`}).join('')}</div>`}
+const saveStep=()=>({el:()=>$('#sbar:not(.hide)')||$('[data-d=addrow]')||$('.rows'),title:'لا تنسى تحفظ',
+ body:`<p>أي تعديل تسويه ما يوصل للعملاء إلا لما تضغط <b>«حفظ التغييرات»</b>. الزر يطلع في شريط تحت أول ما تغيّر أي شي، كذا:</p><div class="sbmock"><span>عندك تغييرات ما انحفظت</span><b>تراجع</b><b class="p">حفظ التغييرات</b></div><p class="hx-tip">غلطت؟ اضغط «تراجع» ويرجع كل شي زي ما كان.</p>`});
+function helpSteps(kind){const W=A.work||A.menu,first='.irow:first-child',w=k=>`[data-w="${kind}:0:${k}"]`;
+ if(kind==='drinks')return [
+  {el:'.dcard',title:'هذي مشروباتك',body:'<p>كل بطاقة هنا مشروب يشوفه العميل في المنيو. اضغط على أي مشروب عشان تغيّر صورته أو اسمه أو سعره، أو تحذفه.</p><p class="hx-tip">الرقم على صورة المشروب هو مكانه في المنيو.</p>'},
+  {el:'.dnew',title:'مشروب جديد',body:'<p>اضغط هنا عشان تضيف مشروب جديد للمنيو.</p>'},
+  {el:'[data-d=sort]',title:'ترتيب المشروبات',body:'<p>تبي مشروب يطلع أول؟ اضغط هنا ورتّبهم بالأسهم أو بالسحب.</p><p class="hx-tip">أول مشروب يطلع أول واحد في المنيو، وأول 3 يطلعون في الصفحة الرئيسية.</p>'},
+  {title:'تبي نوريك كيف تضيف مشروب؟',body:'<p>نفتح لك مشروب جديد، ونشرح لك كل جزء فيه خطوة بخطوة، وأنت تشوف شكله عند العميل.</p>',extra:[{label:'إيه، وريني',p:true,fn:()=>openDrink('',{guided:true})}],finish:'لا، خلاص'}];
+ if(kind==='addons')return [
+  {title:'وش هي الإضافات؟',body:`<p>الإضافات هي اللي يزيدها العميل على مشروبه: سيرب، بوبا، رغوة، رشّات…</p><p>العميل يشوفها كمضخات في «مكينة» تحضير المشروب. كل ضغطة على زر <b>«ضخ»</b> تزيد وحدة (لين 3)، وتنصب في الكوب قدامه.</p><div class="hx-icons">${W.addons.slice(0,4).map(a=>`<span>${M.icon(a,46)}<small>${esc(a.ar||a.name)}</small></span>`).join('')}</div>`},
+  {el:`${first} .pv`,title:'صورة الإضافة',body:'<p>هذي الصورة الصغيرة تطلع للعميل على المضخة. تتلوّن باللون اللي تختاره، وشكلها يتغيّر حسب «الشكل في الكوب».</p>'},
+  {el:fldsOf(w('ar'),w('name')),title:'اسم الإضافة',body:'<p>اكتب الاسم بالعربي والإنجليزي. العميل يشوف الاسم باللغة اللي اختارها.</p>'},
+  {el:fldOf(w('price')),title:'السعر',body:'<p>كم تزيد الإضافة على سعر المشروب. إذا العميل ضغط المضخة مرتين، تنحسب مرتين.</p><p class="hx-tip">إضافة مجانية؟ اكتب 0</p>'},
+  {el:fldOf(w('color')),title:'اللون',body:'<p>لون الإضافة داخل الكوب وعلى المضخة. اختار لون قريب من لونها الحقيقي، مثلاً وردي للفراولة وبني للبوبا.</p>'},
+  {el:fldOf(w('kind')),title:'الشكل في الكوب',body:`<p>يحدد كيف تطلع الإضافة داخل كوب العميل:</p>${kindDemo()}`},
+  {el:`${first} .del`,title:'حذف إضافة',body:'<p>خلصت عندك إضافة أو ما تبيها؟ احذفها من هنا. الطلبات القديمة ما تتأثر.</p>'},
+  {el:'[data-d=addrow]',title:'إضافة جديدة',body:'<p>اضغط هنا عشان تضيف إضافة جديدة. تنزل آخر القائمة، وتكتب اسمها وسعرها.</p><p class="hx-tip">وتقدر تختار لكل مشروب إضافاته من صفحة المشروب نفسه.</p>'},
+  saveStep()];
+ if(kind==='milks'){const m0=W.milks.filter(m=>m.color).sort((a,b)=>M.lum(a.color)-M.lum(b.color))[0]||{id:'_m',name:'',ar:'',add:0,color:'#f1e2c6'};return [
+  {title:'أنواع الحليب',body:`<p>العميل يختار نوع حليب واحد لمشروبه، من أزرار مثل هذي:</p><div class="hx-chips">${W.milks.map((m,i)=>`<span class="chip ${i?'':'on'}"><span class="sw" style="background:${m.color||'transparent'}"></span>${esc(m.ar||m.name)}${m.add?` <small>+${money(m.add)}</small>`:''}</span>`).join('')}</div><p class="hx-tip">أول نوع في القائمة هو اللي يكون مختار من البداية.</p>`},
+  {el:`${first} .pv`,title:'لون الحليب',body:`<p>الدائرة تبيّن لون الحليب. هذا اللون يطلع كطبقة داخل كوب العميل:</p><div class="kdemo two"><figure>${sampleCup({milks:[m0],milk:m0.id})}<figcaption>مع ${esc(m0.ar||m0.name||'حليب')}</figcaption></figure><figure>${sampleCup()}<figcaption>بدون حليب</figcaption></figure></div>`},
+  {el:fldsOf(w('ar'),w('name')),title:'اسم الحليب',body:'<p>اكتب الاسم بالعربي والإنجليزي، مثل «شوفان» و «Oat».</p>'},
+  {el:fldOf(w('add')),title:'زيادة السعر',body:'<p>كم يزيد هذا الحليب على سعر المشروب.</p><p class="hx-tip">حليب عادي بدون زيادة؟ خلها 0، ويطلع للعميل بدون سعر.</p>'},
+  {el:fldOf(w('color')),title:'اللون',body:'<p>اختار لون قريب من لون الحليب الحقيقي. الحليب العادي أبيض، الشوفان بيج…</p>'},
+  {el:`${first} .del`,title:'حذف نوع',body:'<p>ما عندك هذا النوع؟ احذفه من هنا. لازم يبقى نوع واحد على الأقل.</p>'},
+  {el:'[data-d=addrow]',title:'نوع حليب جديد',body:'<p>اضغط هنا عشان تضيف نوع حليب جديد، وبعدين اكتب اسمه وسعره واختار لونه.</p>'},
+  saveStep()]}
+ const d0=A.menu.drinks[0],s1=W.sizes[1]||W.sizes[0];return [
+  {title:'الأحجام',body:`<p>عندك 3 أحجام ثابتة. تقدر تغيّر أسماءها وكم تزيد على السعر، بس ما تنحذف.</p><div class="kdemo three">${W.sizes.map(s=>`<figure>${sampleCup({size:s.id})}<figcaption>${esc(s.ar||s.name)}</figcaption></figure>`).join('')}</div>`},
+  {el:fldsOf('[data-w="sizes:0:ar"]','[data-w="sizes:0:name"]'),title:'اسم الحجم',body:'<p>تقدر تسمّي الأحجام زي ما تبي، مثل «صغير» أو «12 أونصة».</p>'},
+  {el:fldOf('[data-w="sizes:0:add"]'),title:'زيادة السعر',body:`<p>كم يزيد هذا الحجم على سعر المشروب. الحجم الصغير عادة 0.</p>${d0&&s1?`<p class="hx-tip">مثال: ${esc(d0.ar||d0.name)} سعره ${money(d0.price)}. لو العميل اختار «${esc(s1.ar||s1.name)}» يصير ${money((+d0.price||0)+(+s1.add||0))}.</p>`:''}`},
+  {title:'كل مشروب وأحجامه',body:'<p>ما لازم كل مشروب يكون له 3 أحجام. افتح أي مشروب من «المشروبات» واختار الأحجام اللي تبيعها له (القسم 3).</p>'},
+  saveStep()]}
+/* the walkthrough of one drink's page, for the first drink (or any time from the "شرح" button) */
+function drinkSteps(sh){const q=s=>()=>$(s,sh),qf=(...ss)=>()=>ss.map(s=>$(s,sh)?.closest('.fld'));
+ return [
+  {el:q('#dprev'),title:'هذا شكل مشروبك عند العميل',body:'<p>في المنيو يطلع كبطاقة فيها الصورة والاسم والسعر. ولما العميل يختاره، يصير كوب مبتسم يتعبّى قدامه.</p><p class="hx-tip">كل شي تكتبه تحت، يتغيّر هنا على طول.</p>'},
+  {el:q('#sec-photo'),title:'صورة المشروب',body:'<p>اضغط <b>«اختر صورة»</b> وحط صورة مشروبك. الصور الطولية تطلع أحلى.</p><p class="hx-tip">ما عندك صورة الحين؟ عادي، نرسم كوب بلون المشروب، وتقدر تحط الصورة بعدين.</p>'},
+  {el:qf('[data-f=ar]','[data-f=name]'),title:'اسم المشروب',body:'<p>اكتب الاسم بالعربي والإنجليزي. جرّب تكتب الحين، وشوف البطاقة فوق تتغيّر.</p>'},
+  {el:qf('[data-f=descAr]','[data-f=desc]'),title:'وصف قصير',body:'<p>جملة صغيرة تطلع تحت الاسم، مثل «ماتشا مع حليب الشوفان». تقدر تخليها فاضية.</p>'},
+  {el:qf('[data-f=price]'),title:'السعر',body:'<p>سعر أصغر حجم بدون إضافات. الحجم الأكبر والحليب والإضافات تنزاد عليه، والعميل يشوف المجموع وهو يختار.</p>'},
+  {el:qf('[data-f=color]'),title:'لون المشروب',body:'<p>يلوّن الكوب المبتسم اللي يتعبّى قدام العميل. اختار لون قريب من لون مشروبك.</p>'},
+  {el:q('#sec-sizes'),title:'الأحجام',body:'<p>اختار الأحجام اللي تبيعها لهذا المشروب. اللي عليه علامة ✓ يطلع للعميل.</p>'},
+  {el:q('#sec-addons'),title:'الإضافات',body:'<p><b>«كل الإضافات»</b> يعني العميل يقدر يحط أي إضافة في هذا المشروب. أو اختار <b>«إضافات محددة»</b> وحدد اللي تناسبه بس.</p>'},
+  {el:q('.sft .btn.p'),title:'آخر شي: احفظ',body:'<p>لما تخلص اضغط <b>«حفظ المشروب»</b>، ويطلع للعملاء على طول.</p>'}]}
+
+/* ================= the store's name and logo ================= */
+const initials=b=>((b.name||(b.ar?'':M.DEF_NAME[0])).match(/[A-Za-z0-9]+/g)||[]).slice(0,3).map(w=>w[0].toUpperCase()).join('');
+function brandPreview(b){const ar=b.ar.trim()||b.name.trim()||M.DEF_NAME[1],en=b.name.trim()||b.ar.trim()||M.DEF_NAME[0],[h1,h2]=M.halves(ar),lg=M.logoHTML(b.logo),c=initials(b);
+ return `<div class="bprev" aria-hidden="true"><div class="bp-top">${lg}<b>${esc(ar)}</b><span class="bp-pills"><i></i><i></i></span></div>
+<div class="bp-hero"><div class="tit"><div class="t1 bub-g">${esc(h1)}</div>${h2?`<div class="t2 bub-p">${esc(h2)}</div>`:''}</div></div>
+<div class="bp-top bp-en" dir="ltr">${lg}<b>${esc(en)}</b><small>English</small></div>
+<p class="bp-no">رقم الطلب يطلع كذا: <b dir="ltr">#${c?c+'-':''}1234</b></p></div>`}
+function brandForm(b,{name=true,logo=true}={}){
+ return `${name?`<label class="fld">اسم المحل بالعربي<input data-b="ar" value="${esc(b.ar)}" dir="rtl" maxlength="40" placeholder="مثال: ماتشا موتشي"></label>
+<label class="fld">اسم المحل بالإنجليزي<input data-b="name" value="${esc(b.name)}" dir="ltr" maxlength="40" placeholder="e.g. Matcha Mochi"></label>`:''}
+${logo?`<div class="blrow"><span class="blimg">${M.logoHTML(b.logo)}</span><div class="pc"><label class="btn ${name?'':'p'}">${ICO.cam}<span>${b.logo?'غيّر الشعار':'اختر صورة الشعار'}</span><input type="file" accept="image/*" data-b="file" class="hide"></label>${b.logo?'<button type="button" class="lnk mut" data-b="nologo">شيل الشعار وارجع للشعار الأصلي</button>':'<span class="hint" style="margin:0">بدون شعار، يطلع الشعار الأصلي ♡</span>'}<span class="hint" data-b="up" style="margin:0"></span></div></div>`:''}
+<p class="lerr" data-b="err" role="alert"></p>
+<h3 class="bsub">كذا يشوفه العميل:</h3><div data-b="prev">${brandPreview(b)}</div>`}
+/* listens once on a box that stays; redraw() paints the form again after a logo change */
+function bindBrand(box,b,redraw){
+ box.addEventListener('input',e=>{const k=e.target.dataset?.b;if(k!=='ar'&&k!=='name')return;b[k]=e.target.value;const p=$('[data-b=prev]',box);if(p)p.innerHTML=brandPreview(b);const er=$('[data-b=err]',box);if(er)er.textContent=''});
+ box.addEventListener('change',async e=>{if(e.target.dataset?.b!=='file'||!e.target.files[0])return;const up=$('[data-b=up]',box);up.textContent='جاري رفع الشعار…';b.busy=true;
+  try{const blob=await shrinkLogo(e.target.files[0]);const j=await api('images',{method:'POST',raw:blob,type:'image/png'});b.logo=j.url;b.busy=false;redraw()}
+  catch(x){b.busy=false;up.textContent=x.code==='img'?'ما قدرنا نقرأ هالملف كصورة':errMsg(x)}});
+ box.addEventListener('click',e=>{if(e.target.closest('[data-b=nologo]')){b.logo='';redraw()}})}
+const brandOK=(b,box)=>{if(b.ar.trim()||b.name.trim())return true;const er=$('[data-b=err]',box);if(er)er.textContent='اكتب اسم المحل';$('[data-b=ar]',box)?.focus();return false};
+async function saveBrand(b,ok){try{const j=await api('brand',{method:'PUT',body:{name:b.name.trim(),ar:b.ar.trim(),logo:b.logo,done:!!b.done}});A.brand=j.brand;M.setBrand(A.brand);
+  const l=$('.ah .logo');if(l)l.innerHTML=`${M.logoHTML()}<b>${esc(M.bName(1))}</b>`;badge();if(ok)toast(ok);return true}
+ catch(e){if(e.code!=='auth')toast(errMsg(e),true);return false}}
+
+/* ================= first-time setup =================
+   A new store is asked for its name and logo, then walked through adding its first drink. */
+function runWizard(){$$('.wiz').forEach(x=>x.remove());
+ const b={name:A.brand.name||'',ar:A.brand.ar||'',logo:A.brand.logo||''},Z={step:0,drink:null};
+ const el=document.createElement('div');el.className='wiz';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','تجهيز المحل');
+ document.body.appendChild(el);document.body.style.overflow='hidden';
+ const steps=['اسم المحل','الشعار','أول مشروب'];
+ const head=()=>`<ol class="wsteps">${steps.map((s,i)=>`<li class="${Z.step===i+1?'on':Z.step>i+1?'done':''}"><i>${Z.step>i+1?'✓':i+1}</i>${s}</li>`).join('')}</ol>`;
+ const card=d=>{const m0=A.menu.milks.find(m=>m.color);return `<div class="pvrow wcard"><figure><div class="pvcard"><img src="${d.img||M.drinkArt(d,0)}" alt=""><div class="pvinfo"><b>${esc(d.ar||d.name)}</b><span>${esc(d.descAr||d.desc)}</span><span class="price">${money(fromPrice(d))}</span></div></div><figcaption>في المنيو</figcaption></figure><figure><div class="pvcup">${sampleCup({drink:d,milks:m0?[m0]:[],milk:m0?.id||null})}</div><figcaption>لما يحضّره</figcaption></figure></div>`};
+ const draw=()=>{const s=Z.step;let h='';
+  if(s===0)h=`<div class="wbox wcenter">${M.catSVG('happy')}<h1>أهلاً فيك! ♡</h1><p>هذي لوحة التحكم حقت محلك. خلنا نجهّزه سوا في 3 خطوات بسيطة:</p>
+<ol class="wlist">${steps.map((x,i)=>`<li><i>${i+1}</i>${x}</li>`).join('')}</ol><button class="btn p big" data-z="next">يلا نبدأ ←</button></div>`;
+  if(s===1)h=`<div class="wbox">${head()}<h2>وش اسم محلك؟</h2><p class="hint">يطلع فوق في كل صفحة، وفي العنوان الكبير بالصفحة الرئيسية، وفي رسائل الواتساب للعملاء.</p>${brandForm(b,{logo:false})}
+<div class="wnav"><button class="btn" data-z="back">→ رجوع</button><button class="btn p" data-z="next">التالي ←</button></div></div>`;
+  if(s===2)h=`<div class="wbox">${head()}<h2>حط شعار محلك</h2><p class="hint">الشعار يطلع جنب اسم المحل فوق كل صفحة، وعلى أيقونة الموقع في المتصفح. الصور المربعة أو الدائرية تطلع أحلى.</p>${brandForm(b,{name:false})}
+<div class="wnav"><button class="btn" data-z="back">→ رجوع</button><button class="btn p" data-z="next">${b.logo?'التالي ←':'تخطَّ، بحطه بعدين ←'}</button></div></div>`;
+  if(s===3)h=`<div class="wbox">${head()}<h2>أضف أول مشروب ♡</h2><p>بنفتح لك صفحة المشروب، ونشرح لك كل جزء فيها خطوة بخطوة. وأنت تكتب، تشوف شكل مشروبك عند العميل على طول. مثلاً كذا:</p>
+${card(A.menu.drinks[0])}
+${isDemo()?'<p class="wnote">المشروبات اللي في المنيو الحين أمثلة بس. أول ما تحفظ مشروبك، نشيلها ويبقى مشروبك.</p>':''}
+<div class="wnav"><button class="btn" data-z="back">→ رجوع</button><button class="btn p big" data-z="drink">يلا، أضيف مشروبي ←</button></div>
+<button class="lnk mut wskip" data-z="skip">${isDemo()?'بعدين، خلّ المشروبات التجريبية الحين':'عندي مشروبات من قبل، تخطَّ'}</button></div>`;
+  if(s===4)h=`<div class="wbox wcenter">${M.catSVG('happy')}<h1>محلك جاهز! ♡</h1>${Z.drink?`<p>مشروبك صار في المنيو، وكذا يشوفه العميل:</p>${card(Z.drink)}`:''}
+<ul class="wtips"><li><b>ترتيب المشروبات:</b> من «المشروبات» اضغط «ترتيب المشروبات».</li><li><b>الإضافات والحليب والأحجام:</b> فيها أمثلة جاهزة. افتح أي واحد منها واضغط الزر الأصفر الكبير، ونشرح لك كيف تعدّلها.</li><li><b>اسم المحل والشعار:</b> تغيّرها متى ما تبي من «الحساب».</li><li><b>الطلبات:</b> توصلك في «الطلبات» مع صوت تنبيه.</li></ul>
+<div class="wnav"><a class="btn" href="/" target="_blank" rel="noopener">افتح المتجر وشوفه ↗</a><button class="btn p big" data-z="finish">ابدأ ♡</button></div></div>`;
+  el.innerHTML=h;el.scrollTop=0;
+  if(s===1)setTimeout(()=>$('[data-b=ar]',el)?.focus(),60);else el.querySelector('.btn.p')?.focus({preventScroll:true})};
+ bindBrand(el,b,draw);
+ const done=async()=>{if(await saveBrand({...b,done:true})){Z.step=4;draw()}};
+ el.addEventListener('click',async e=>{const t=e.target.closest('[data-z]');if(!t)return;const a=t.dataset.z;
+  if(a==='back'){Z.step--;draw()}
+  if(a==='next'){if(Z.step===1&&!brandOK(b,el))return;
+   if(Z.step===2){if(b.busy){toast('انتظر لين يخلص رفع الشعار');return}t.disabled=true;if(!(await saveBrand(b))){t.disabled=false;return}}
+   Z.step++;draw()}
+  if(a==='drink'){openDrink('',{guided:true,onDone:d=>{document.body.style.overflow='hidden';if(d){Z.drink=d;done()}else toast('ما انحفظ المشروب. اضغط الزر وجرّب مرة ثانية ♡')}})}
+  if(a==='skip')done();
+  if(a==='finish'){el.remove();document.body.style.overflow='';if(Z.drink){A.dtab='drinks';location.hash='#drinks';route()}}});
+ draw()}
 
 /* ================= the visual text editor =================
    The real shop page runs inside a frame in "edit" mode. Every text in it is tagged, so each one gets a box
@@ -304,6 +515,7 @@ let rzT=0;addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{i
 
 /* ================= account ================= */
 function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1></div><div class="acct">
+<section class="sec" id="brandsec"></section>
 <section class="sec"><h3>دخلت باسم «${esc(A.me.user||'')}»</h3><p class="hint">احفظ رابط هذي الصفحة عشان ترجع لها: <b dir="ltr">${esc(location.origin)}/admin</b></p><button class="btn" data-a="logout">تسجيل الخروج</button></section>
 <form class="sec" id="pwf" novalidate><h3>تغيير كلمة المرور</h3><p class="hint">بعد التغيير، أي جهاز ثاني داخل بالحساب يطلع ويحتاج يدخل من جديد.</p>
 <label class="fld">كلمة المرور الحالية<input name="cur" type="password" autocomplete="current-password" dir="ltr"></label>
@@ -311,6 +523,13 @@ function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1
 <label class="fld">اكتب الجديدة مرة ثانية<input name="nw2" type="password" autocomplete="new-password" dir="ltr"></label>
 <label class="fld">اسم مستخدم جديد (اختياري)<input name="user" autocomplete="username" placeholder="${esc(A.me.user||'')}" dir="auto"></label>
 <p class="lerr" id="pwerr" role="alert"></p><button class="btn p" type="submit">حفظ كلمة المرور</button></form></div>`;
+ /* the store's name and logo */
+ const bs=$('#brandsec'),bb={name:A.brand.name||'',ar:A.brand.ar||'',logo:A.brand.logo||'',done:true};
+ const bdraw=()=>{bs.innerHTML=`<h3>محلك</h3><p class="hint">اسم المحل وشعاره يطلعون للعملاء فوق كل صفحة.</p>${brandForm(bb)}<div class="wnav" style="justify-content:flex-start"><button class="btn p" data-b="save">حفظ اسم المحل والشعار</button></div><button class="lnk wskip" data-b="rewiz">شغّل الإعداد والشرح من البداية</button>`};
+ bdraw();bindBrand(bs,bb,bdraw);
+ bs.addEventListener('click',async e=>{const t=e.target.closest('[data-b]');if(!t)return;
+  if(t.dataset.b==='save'){if(!brandOK(bb,bs))return;if(bb.busy){toast('انتظر لين يخلص رفع الشعار');return}t.disabled=true;await saveBrand(bb,'تم الحفظ ✓ والعملاء يشوفون الاسم والشعار الجديد');t.disabled=false}
+  if(t.dataset.b==='rewiz')runWizard()});
  const f=$('#pwf');f.addEventListener('submit',async e=>{e.preventDefault();const er=$('#pwerr');er.textContent='';
   if(f.nw.value.length<6){er.textContent='كلمة المرور الجديدة لازم تكون 6 أحرف أو أكثر';return}if(f.nw.value!==f.nw2.value){er.textContent='كلمتا المرور الجديدة مو متطابقتين';return}
   const u=f.user.value.trim();if(u&&u.length<3){er.textContent='اسم المستخدم لازم يكون 3 أحرف أو أكثر';return}
@@ -319,5 +538,5 @@ function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1
 async function logout(){if(!(await ask({title:'تسجيل الخروج؟',ok:'خروج'})))return;try{await api('logout',{method:'POST'})}catch(e){}A.me={setup:false,admin:false};A.orders=null;A.seen=null;showLogin()}
 
 /* ================= go ================= */
-(async()=>{try{A.me=await api('me');if(A.me.admin)await start();else showLogin()}catch(e){root.innerHTML=`<div class="login"><div class="lbox">${M.catSVG('hi')}<h1>ما قدرنا نفتح الإدارة</h1><p>${esc(errMsg(e))}</p><button class="btn p" onclick="location.reload()">حاول مرة ثانية</button></div></div>`}})();
+(async()=>{try{const[me,shop]=await Promise.all([api('me'),api('shop').catch(()=>null)]);A.me=me;if(shop)M.setBrand(shop.brand);if(A.me.admin)await start();else showLogin()}catch(e){root.innerHTML=`<div class="login"><div class="lbox">${M.catSVG('hi')}<h1>ما قدرنا نفتح الإدارة</h1><p>${esc(errMsg(e))}</p><button class="btn p" onclick="location.reload()">حاول مرة ثانية</button></div></div>`}})();
 }

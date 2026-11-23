@@ -5,6 +5,7 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 /* ---------- storage ----------
    shop/menu      the menu (drinks, sizes, milks, add-ons)
    shop/texts     published text changes { key: [english, arabic] }
+   shop/brand     the store's name and logo { name, ar, logo, done }
    admin/auth     { user, salt, hash, ver }
    admin/secret   random key used to sign the admin cookie
    orders/o/<id>  one order per key; ids start with the time so they sort newest-last
@@ -95,6 +96,19 @@ function cleanMenu(m: any) {
   });
   if (!drinks.length || !sizes.length) return null;
   return { drinks, sizes, milks, addons };
+}
+
+/* the store's own name and logo. Empty names mean the template's default name is shown.
+   done = the owner finished the first-time setup in the admin. */
+function cleanBrand(b: any) {
+  return {
+    name: str(b?.name, 40), ar: str(b?.ar, 40),
+    logo: IMG.test(b?.logo) ? b.logo : "",
+    done: b?.done === true,
+  };
+}
+async function getBrand() {
+  return cleanBrand(await store("shop").get("brand", { type: "json" }));
 }
 
 async function getMenu() {
@@ -215,8 +229,8 @@ export default async (req: Request, ctx: Context) => {
   try {
     /* public */
     if (route === "GET shop") {
-      const [menu, texts] = await Promise.all([getMenu(), store("shop").get("texts", { type: "json" })]);
-      return json({ menu, texts: cleanTexts(texts) });
+      const [menu, texts, brand] = await Promise.all([getMenu(), store("shop").get("texts", { type: "json" }), getBrand()]);
+      return json({ menu, texts: cleanTexts(texts), brand });
     }
     if (route === "POST orders" && parts.length === 1) {
       if (!isJson) return fail("type", 415);
@@ -282,6 +296,12 @@ export default async (req: Request, ctx: Context) => {
       if (!m) return fail("menu");
       await store("shop").setJSON("menu", m);
       return json({ menu: m });
+    }
+    if (route === "PUT brand") {
+      if (!isJson) return fail("type", 415);
+      const b = cleanBrand(await body());
+      await store("shop").setJSON("brand", b);
+      return json({ brand: b });
     }
     if (route === "PUT texts") {
       if (!isJson) return fail("type", 415);
