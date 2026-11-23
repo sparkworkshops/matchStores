@@ -6,7 +6,8 @@ const ls={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.pa
 const clone=o=>JSON.parse(JSON.stringify(o));
 const money=n=>M.numStr(n)+' ر.س';
 const root=$('#root');
-const A={me:null,menu:null,texts:{},orders:null,seen:null,fresh:new Set(),filter:'all',olimit:30,page:'orders',dtab:'drinks',work:null,dirty:false,brand:{},order:null,orderDirty:false};
+const A={me:null,menu:null,texts:{},orders:null,seen:null,fresh:new Set(),filter:'all',olimit:30,page:'orders',dtab:'drinks',work:null,dirty:false,brand:{},order:null,orderDirty:false,
+ v:'',fullAt:0,loading:false,again:false,mutAt:0,outSeen:new Map(),set:null,sw:null,sdirty:false,cards:null,q:'',climit:60};
 
 const I=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const ICO={orders:I('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>'),cup:I('<path d="M5 8h14l-1.5 12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/><path d="M4 8h16M13 8l2-6"/>'),
@@ -14,7 +15,9 @@ const ICO={orders:I('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 1
  wa:I('<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9.5 9c0 3 2.5 5.5 5.5 5.5"/>'),check:I('<path d="M5 12.5l4.5 4.5L19 7"/>'),cam:I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
  help:I('<circle cx="12" cy="12" r="9.5"/><path d="M9.2 9.4a2.9 2.9 0 1 1 4 2.6c-.8.4-1.2 1-1.2 1.9v.3"/><path d="M12 17.3v.2"/>'),
  sort:I('<path d="M8 4v16M4.5 7.5L8 4l3.5 3.5M16 20V4M12.5 16.5L16 20l3.5-3.5"/>'),
- up:I('<path d="M6 15l6-6 6 6"/>'),down:I('<path d="M6 9l6 6 6-6"/>')};
+ up:I('<path d="M6 15l6-6 6 6"/>'),down:I('<path d="M6 9l6 6 6-6"/>'),
+ stamp:I('<circle cx="12" cy="12" r="9.5"/><path d="M12 7.2l1.5 3 3.3.4-2.4 2.3.6 3.3-3-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.4z"/>'),
+ gear:I('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')};
 
 /* ---------- talking to the server ---------- */
 async function api(path,{method='GET',body,raw,type,keepalive}={}){
@@ -51,56 +54,115 @@ ${setup?'<label class="fld">اكتب كلمة المرور مرة ثانية<inp
    er.textContent=x.code==='login'?'اسم المستخدم أو كلمة المرور غلط':errMsg(x)}})}
 
 /* ---------- shell + pages ---------- */
-const NAV=[['orders','الطلبات',ICO.orders],['drinks','المشروبات',ICO.cup],['texts','نصوص الموقع',ICO.text],['account','الحساب',ICO.user]];
-const navLinks=()=>NAV.map(([k,n,ic])=>`<a href="#${k}" data-nav="${k}">${ic}<span>${n}</span>${k==='orders'?'<span class="bd" data-bd></span>':''}</a>`).join('');
-function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.logoHTML()}<b>${esc(M.bName(1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" href="/" target="_blank" rel="noopener">افتح المتجر ↗</a></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks()}</nav>`}
+/* [page, name, icon, short name for the phone's bottom bar] */
+const NAV=[['orders','الطلبات',ICO.orders],['drinks','المشروبات',ICO.cup],['stamps','الأختام',ICO.stamp],['settings','الإعدادات',ICO.gear],['texts','نصوص الموقع',ICO.text,'النصوص'],['account','الحساب',ICO.user]];
+const navLinks=bottom=>NAV.map(([k,n,ic,sh])=>`<a href="#${k}" data-nav="${k}">${ic}<span>${bottom&&sh?sh:n}</span>${k==='orders'?'<span class="bd" data-bd></span>':''}</a>`).join('');
+function shell(){root.innerHTML=`<header class="ah"><div class="ah-in"><a class="logo" href="#orders">${M.logoHTML()}<b>${esc(M.bName(1))}</b></a><nav class="nav" aria-label="أقسام الإدارة">${navLinks()}</nav><a class="shopl" href="/" target="_blank" rel="noopener">افتح المتجر ↗</a></div><div id="outbar"></div></header><main class="page" id="page"></main><nav class="nav bnav" aria-label="أقسام الإدارة">${navLinks(true)}</nav>`}
 const page=()=>$('#page');
 function route(){const h=location.hash.slice(1);A.page=NAV.some(n=>n[0]===h)?h:'orders';
  $$('[data-nav]').forEach(a=>{const on=a.dataset.nav===A.page;a.classList.toggle('on',on);on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current')});
  if(A.page!=='texts')leaveEditor();
- ({orders:renderOrders,drinks:renderDrinks,texts:renderTexts,account:renderAccount})[A.page]();scrollTo(0,0)}
+ ({orders:renderOrders,drinks:renderDrinks,stamps:renderStamps,settings:renderSettings,texts:renderTexts,account:renderAccount})[A.page]();scrollTo(0,0)}
 addEventListener('hashchange',()=>{if(A.me&&A.me.admin)route()});
-async function start(){const j=await api('shop');A.menu=j.menu;A.texts=j.texts||{};A.brand=j.brand||{};M.setTexts(A.texts);M.setMenu(A.menu);M.setBrand(A.brand);shell();route();loadOrders(true);startPoll();
+async function start(){const j=await api('shop');A.menu=j.menu;A.texts=j.texts||{};A.brand=j.brand||{};A.set=j.settings||null;M.setTexts(A.texts);M.setMenu(A.menu);M.setBrand(A.brand);M.setSettings(A.set);shell();route();loadOrders(true,true);startPoll();
  /* a new store: ask for its name and logo, then show how to add the first drink */
  if(!A.brand.done)runWizard()}
 
 /* ================= orders ================= */
+/* One timer only. Each check first asks "did anything change?" (one tiny read); the full list is only
+   fetched when something did, or once a minute to be safe. While a pickup customer might be on the way,
+   it checks every few seconds so "I'm outside" shows up fast. */
 let pollT=0;
-function startPoll(){stopPoll();pollT=setInterval(()=>{if(!document.hidden)loadOrders(true)},15000)}
-function stopPoll(){clearInterval(pollT)}
+const watching=()=>(A.orders||[]).some(o=>o.mode==='pickup'&&Date.now()-Date.parse(o.createdAt)<3*3600e3);
+function startPoll(){stopPoll();pollT=setTimeout(tickPoll,watching()?5000:15000)}
+function stopPoll(){clearTimeout(pollT);pollT=0}
+async function tickPoll(){pollT=0;if(!A.me||!A.me.admin)return;await loadOrders(true);if(A.me&&A.me.admin&&!pollT)pollT=setTimeout(tickPoll,watching()&&!document.hidden?5000:15000)}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&A.me&&A.me.admin)loadOrders(true)});
-function ding(){try{const c=new (window.AudioContext||window.webkitAudioContext)();[880,1320].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=f;o.connect(g);g.connect(c.destination);const t0=c.currentTime+i*.18;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.25,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.3);o.start(t0);o.stop(t0+.32)})}catch(e){}}
-async function loadOrders(quiet){try{const j=await api('orders');const before=JSON.stringify(A.orders);const prev=A.seen;A.orders=j.orders;A.seen=new Set(A.orders.map(o=>o.id));
+addEventListener('online',()=>{if(A.me&&A.me.admin)loadOrders(true,true)});
+/* sounds: one shared player. Browsers only allow sound after the first tap on the page. */
+let AC=null;
+const audio=()=>{try{AC=AC||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}return AC};
+const soundOK=()=>!!AC&&AC.state==='running';
+function soundBtn(){$$('.sndb').forEach(b=>b.hidden=soundOK())}
+addEventListener('pointerdown',()=>{const c=audio();if(!c)return;if(c.state==='running')setTimeout(soundBtn,0);else c.resume().then(soundBtn).catch(()=>{})},true);
+function tone(seq,vol=.25){const c=audio();if(!c)return;if(c.state!=='running')c.resume().catch(()=>{});const now=c.currentTime;
+ seq.forEach(([f,at,d,type])=>{const o=c.createOscillator(),g=c.createGain();o.type=type||'sine';o.frequency.value=f;o.connect(g);g.connect(c.destination);const t0=now+at;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(vol,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+d);o.start(t0);o.stop(t0+d+.03)})}
+const ding=()=>tone([[880,0,.3],[1320,.18,.3]]);
+/* the "I'm outside" alarm: louder and longer than a new-order ding, so it's clearly different */
+const siren=()=>{const s=[];for(let i=0;i<3;i++)s.push([988,i*.5,.22,'square'],[740,i*.5+.25,.22,'square']);tone(s,.16)};
+async function loadOrders(quiet,full){
+ if(A.loading){A.again=true;return}
+ A.loading=true;const t0=Date.now();
+ try{const useV=!full&&A.v&&A.orders&&Date.now()-A.fullAt<60000;
+  const j=await api('orders'+(useV?'?v='+encodeURIComponent(A.v):''));
+  /* a tap on an order happened while this was loading: this answer may be older, so ask again */
+  if(A.mutAt>t0){A.again=true;return}
+  if(j.same){outsideCheck();return}
+  A.v=j.v||'';A.fullAt=Date.now();
+  /* every order shows once, whatever the server sends */
+  const ids=new Set(),list=[];for(const o of j.orders||[]){if(!o||!o.id)continue;const k=o.cid||o.id;if(ids.has(o.id)||ids.has(k))continue;ids.add(o.id);ids.add(k);list.push(o)}
+  const before=JSON.stringify(A.orders);const prev=A.seen;A.orders=list;A.seen=ids;
   const fresh=prev?A.orders.filter(o=>!prev.has(o.id)):[];
   if(fresh.length){fresh.forEach(o=>A.fresh.add(o.id));ding();toast(fresh.length===1?'وصل طلب جديد ♡':`وصلت ${fresh.length} طلبات جديدة ♡`)}
-  badge();if(A.page==='orders'&&before!==JSON.stringify(A.orders))renderOrders()}
- catch(e){if(!quiet&&e.code!=='auth')toast(errMsg(e),true);if(A.page==='orders'&&!A.orders)renderOrders()}}
-function badge(){const n=(A.orders||[]).filter(o=>o.status==='new').length;$$('[data-bd]').forEach(b=>b.textContent=n||'');document.title=(n?`(${n}) `:'')+'إدارة '+M.bName(1)}
+  badge();outsideCheck();if(A.page==='orders'&&before!==JSON.stringify(A.orders))renderOrders()}
+ catch(e){if(!quiet&&e.code!=='auth')toast(errMsg(e),true);if(A.page==='orders'&&!A.orders)renderOrders()}
+ finally{A.loading=false;if(A.again){A.again=false;setTimeout(()=>loadOrders(true,true),50)}}}
+/* customers who tapped "I'm outside" and nobody answered yet */
+const isOut=o=>o.mode==='pickup'&&!!o.outsideAt&&o.outsideAck!==o.outsideAt&&Date.now()-Date.parse(o.outsideAt)<2*3600e3;
+const ago=iso=>{const m=Math.max(0,Math.round((Date.now()-Date.parse(iso))/60000));return m<1?'الحين':m===1?'قبل دقيقة':m===2?'قبل دقيقتين':m<11?`قبل ${m} دقايق`:`قبل ${m} دقيقة`};
+function outsideCheck(){const list=(A.orders||[]).filter(isOut),now=Date.now();let fresh=null,play=false;
+ for(const o of list){let s=A.outSeen.get(o.id);if(!s||s.at!==o.outsideAt){s={at:o.outsideAt,plays:0,last:0};A.outSeen.set(o.id,s);fresh=o}
+  /* ring again every 15 seconds until someone taps "on my way", a few times at most */
+  if(s.plays<4&&now-s.last>=15000){s.plays++;s.last=now;play=true}}
+ if(play){siren();try{navigator.vibrate&&navigator.vibrate([300,120,300,120,300])}catch(e){}}
+ if(fresh){toast(`🚗 ${fresh.name} برا المحل!`);if(A.page==='orders')renderOrders()}
+ const bar=$('#outbar');if(bar)bar.innerHTML=list.map(o=>`<div class="oalert" role="alert"><span class="car" aria-hidden="true">🚗</span><button class="oa-t" data-o="goto" data-id="${o.id}"><b>${esc(o.name)} برا المحل</b><small>طلب ${esc(M.orderNo(o.no))} · ${ago(o.outsideAt)}${o.outsideCount>1?` · ضغط ${o.outsideCount} مرات`:''}</small></button><button class="btn" data-o="ack" data-id="${o.id}">${ICO.check}تمام، طالع له</button></div>`).join('');
+ badge()}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-o]');if(!b)return;const id=b.dataset.id;
+ if(b.dataset.o==='ack')ackOut(id);
+ if(b.dataset.o==='goto'){if(A.page!=='orders'){location.hash='#orders'}setTimeout(()=>{const c=$('#o-'+id);c?.scrollIntoView({block:'center',behavior:'smooth'});c?.classList.add('flash');setTimeout(()=>c?.classList.remove('flash'),1600)},80)}});
+function ackOut(id){const o=(A.orders||[]).find(x=>x.id===id);if(!o)return;const was=o.outsideAck;o.outsideAck=o.outsideAt;outsideCheck();if(A.page==='orders')renderOrders();A.mutAt=Date.now();
+ api('orders/'+id,{method:'POST',body:{outsideAck:true},keepalive:true}).then(()=>{A.mutAt=Date.now()}).catch(e=>{o.outsideAck=was;outsideCheck();if(A.page==='orders')renderOrders();if(e.code!=='auth')toast(errMsg(e),true)})}
+function badge(){const n=(A.orders||[]).filter(o=>o.status==='new').length;$$('[data-bd]').forEach(b=>b.textContent=n||'');document.title=((A.orders||[]).some(isOut)?'🚗 ':'')+(n?`(${n}) `:'')+'إدارة '+M.bName(1)}
 /* WhatsApp wants the number with its country code; Saudi numbers like 05x… become 9665x… */
 const waNum=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.length===10&&d.startsWith('05'))d='966'+d.slice(1);else if(d.length===9&&d.startsWith('5'))d='966'+d;return d.length>=10?d:''};
 const waURL=(o,k)=>{const n=waNum(o.phone);return n?`https://wa.me/${n}?text=${encodeURIComponent(M.waText(k,o))}`:''};
 const tf=new Intl.DateTimeFormat('ar-u-nu-latn',{hour:'numeric',minute:'2-digit'}),df=new Intl.DateTimeFormat('ar-u-nu-latn',{weekday:'long',day:'numeric',month:'long'});
 function when(iso){const d=new Date(iso),now=new Date(),y=new Date();y.setDate(now.getDate()-1);const same=(a,b)=>a.toDateString()===b.toDateString();return (same(d,now)?'اليوم':same(d,y)?'أمس':df.format(d))+' · '+tf.format(d)}
 const an=x=>x?(x.ar||x.name):'';
-function orderCard(o){const done=o.status==='done',wo=waURL(o,'waOrder'),wr=waURL(o,'waReady');
- return `<article class="ocard ${done?'done':''} ${A.fresh.has(o.id)?'fresh':''}" aria-label="طلب ${esc(o.no)}">
+const PAYL={cash:'كاش',card:'بطاقة / مدى',transfer:'تحويل بنكي',applepay:'Apple Pay'};
+/* the same customer key the server uses for stamp cards */
+const pkey=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.length===10&&d.startsWith('05'))d='966'+d.slice(1);else if(d.length===9&&d.startsWith('5'))d='966'+d;return d.slice(0,20)};
+function orderCard(o){const done=o.status==='done',dl=o.mode==='delivery',wo=waURL(o,'waOrder'),wr=waURL(o,dl?'waWay':'waReady'),out=isOut(o),fee=+o.fee||0;
+ /* pickup: "ready" sends "your order is ready"; delivery: "out for delivery" sends "your order is on the way" */
+ const doneL=dl?'طلع للتوصيل':'تم التجهيز';
+ return `<article class="ocard ${done?'done':''} ${A.fresh.has(o.id)?'fresh':''} ${out?'outside':''}" id="o-${esc(o.id)}" aria-label="طلب ${esc(o.no)}">
+ ${out?`<div class="oout" role="alert"><span class="car" aria-hidden="true">🚗</span><span><b>العميل برا المحل الحين!</b><small>${ago(o.outsideAt)}، طلع له طلبه</small></span><button class="btn" data-a="ack" data-id="${o.id}">${ICO.check}تمام، طالع له</button></div>`
+  :o.outsideAt?`<div class="oouted">🚗 قال إنه برا المحل الساعة ${tf.format(new Date(o.outsideAt))} ✓</div>`:''}
  <div class="oh"><span class="ono">${esc(M.orderNo(o.no))}</span><span class="otime">${when(o.createdAt)}</span><span class="ost ${done?'d':''}">${done?'تم ✓':'جديد'}</span></div>
  <div class="ocust"><span class="nm">${esc(o.name)}</span><a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>
- <span class="omode ${o.mode==='delivery'?'dl':''}">${o.mode==='delivery'?'توصيل: '+esc(o.addr):'استلام من المحل'}</span></div>
+ <span class="omode ${dl?'dl':''}">${dl?'توصيل: '+esc(o.addr):'استلام من المحل'}</span></div>
+ ${(+o.cardBefore||0)>=8?(o.freeUsed?'<div class="ofree used">🎁 استخدم مشروبه المجاني في هذا الطلب ✓</div>':`<div class="ofree"><span>🎁 بطاقة أختامه كاملة: له مشروب مجاني</span><button class="btn" data-a="redeem" data-id="${o.id}">استخدم المشروب المجاني</button></div>`):''}
  <ul class="oitems">${o.items.map(it=>`<li><img src="${it.img||M.drinkArt({id:it.drink,color:it.color,under:it.under||''},0)}" alt=""><div><b><span class="q">×${it.qty}</span>${esc(an(it))}</b><span class="sz">${esc(an(it.size))}${it.milk?' · '+esc(an(it.milk)):''}</span>${it.addons&&it.addons.length?`<span class="ads">${it.addons.map(a=>`<span>${esc(an(a))}${a.q>1?' ×'+a.q:''}</span>`).join('')}</span>`:''}</div><span class="lp">${money(it.line)}</span></li>`).join('')}</ul>
  ${o.notes?`<div class="onote"><small>ملاحظات العميل</small>${esc(o.notes)}</div>`:''}
- <div class="ofoot"><span class="otot">المجموع <b>${money(o.total)}</b></span><button class="pay ${o.paid?'y':''}" data-a="paid" data-id="${o.id}">${o.paid?'مدفوع ✓':'لم يُدفع بعد'}<small>${o.paid?'اضغط إذا ما دفع':'اضغط إذا دفع'}</small></button><span class="ometh">طريقة الدفع: ${o.method==='card'?'بطاقة / مدى':'كاش'}، عند الاستلام</span></div>
+ ${fee>0?`<div class="ofee"><span>المشروبات <b>${money(o.subtotal??(o.total-fee))}</b></span><span>رسوم التوصيل <b>${money(fee)}</b></span></div>`:''}
+ <div class="ofoot"><span class="otot">المجموع <b>${money(o.total)}</b></span><button class="pay ${o.paid?'y':''}" data-a="paid" data-id="${o.id}">${o.paid?'مدفوع ✓':'لم يُدفع بعد'}<small>${o.paid?'اضغط إذا ما دفع':'اضغط إذا دفع'}</small></button><span class="ometh">طريقة الدفع: ${PAYL[o.method]||'كاش'}${o.method==='transfer'?'':dl?'، عند التوصيل':'، عند الاستلام'}</span></div>
  <div class="oact">${wo?`<a class="btn wa" href="${wo}" target="_blank" rel="noopener">${ICO.wa}واتساب</a>`:'<span class="btn wa" aria-disabled="true">رقم غير صالح</span>'}
- ${done?`<span class="btn g" aria-disabled="true">${ICO.check}تم التجهيز</span><button class="lnk mut oundo" data-a="undo" data-id="${o.id}">إرجاعه لطلب جديد</button>`:wr?`<a class="btn g" href="${wr}" target="_blank" rel="noopener" data-a="done" data-id="${o.id}">${ICO.check}تم التجهيز</a>`:`<button class="btn g" data-a="done" data-id="${o.id}">${ICO.check}تم التجهيز</button>`}</div></article>`}
+ ${done?`<span class="btn g" aria-disabled="true">${ICO.check}${doneL}</span><button class="lnk mut oundo" data-a="undo" data-id="${o.id}">إرجاعه لطلب جديد</button>`:wr?`<a class="btn g" href="${wr}" target="_blank" rel="noopener" data-a="done" data-id="${o.id}">${ICO.check}${doneL}</a>`:`<button class="btn g" data-a="done" data-id="${o.id}">${ICO.check}${doneL}</button>`}</div></article>`}
 function renderOrders(){const p=page();if(!p)return;
  if(!A.orders){p.innerHTML='<div class="tload">جاري تحميل الطلبات… ♡</div>';return}
  const n=A.orders.filter(o=>o.status==='new').length,list=A.orders.filter(o=>A.filter==='all'||o.status===A.filter);
- p.innerHTML=`<div class="ph1"><h1>الطلبات</h1><div class="seg2" role="group" aria-label="عرض">${[['all','الكل'],['new',`جديدة (${n})`],['done','منجزة']].map(([k,l])=>`<button class="${A.filter===k?'on':''}" aria-pressed="${A.filter===k}" data-a="filter" data-v="${k}">${l}</button>`).join('')}</div><p>الأحدث فوق. الصفحة تتحدّث لحالها، وتسمع صوت لما يوصل طلب جديد.</p></div>
+ p.innerHTML=`<div class="ph1"><h1>الطلبات</h1><div class="seg2" role="group" aria-label="عرض">${[['all','الكل'],['new',`جديدة (${n})`],['done','منجزة']].map(([k,l])=>`<button class="${A.filter===k?'on':''}" aria-pressed="${A.filter===k}" data-a="filter" data-v="${k}">${l}</button>`).join('')}</div><button class="btn sndb" data-a="sound" ${soundOK()?'hidden':''}>🔔 شغّل صوت التنبيهات</button><p>الأحدث فوق. الصفحة تتحدّث لحالها، وتسمع صوت لما يوصل طلب جديد، وصوت تنبيه أعلى لما عميل يقول إنه برا المحل.</p></div>
  ${list.length?`<div class="olist">${list.slice(0,A.olimit).map(orderCard).join('')}</div>${list.length>A.olimit?'<div class="more"><button class="btn" data-a="omore">عرض طلبات أقدم</button></div>':''}`
  :`<div class="empty">${M.catSVG('hi')}${A.filter==='new'?'ما فيه طلبات جديدة الحين':A.filter==='done'?'ما فيه طلبات منجزة بعد':'ما وصلت طلبات بعد. أول ما يطلب أحد بيظهر هنا ♡'}</div>`}`}
-async function setOrder(id,patch){const o=A.orders.find(x=>x.id===id);if(!o)return;const old={status:o.status,paid:o.paid};Object.assign(o,patch);A.fresh.delete(id);badge();renderOrders();
- try{const j=await api('orders/'+id,{method:'POST',body:patch,keepalive:true});Object.assign(o,j.order)}
+async function setOrder(id,patch){const o=A.orders.find(x=>x.id===id);if(!o)return;const old={status:o.status,paid:o.paid};Object.assign(o,patch);A.fresh.delete(id);A.mutAt=Date.now();badge();renderOrders();
+ try{const j=await api('orders/'+id,{method:'POST',body:patch,keepalive:true});A.mutAt=Date.now();Object.assign(o,j.order);badge();if(A.page==='orders')renderOrders()}
  catch(e){Object.assign(o,old);badge();renderOrders();if(e.code!=='auth')toast(errMsg(e),true)}}
+/* the free drink from a full stamp card, used on this order */
+async function redeemOn(id){const o=A.orders.find(x=>x.id===id);if(!o)return;
+ if(!(await ask({title:`تستخدم المشروب المجاني لـ${o.name}؟`,body:'بطاقة أختامه ترجع تبدأ من جديد. لا تنسى تخصم سعر مشروب واحد من حسابه.',ok:'استخدمه'})))return;
+ try{await api('loyalty/'+pkey(o.phone),{method:'POST',body:{redeem:true,order:o.id}});o.freeUsed=true;A.mutAt=Date.now();A.cards=null;renderOrders();toast('تم ✓ البطاقة رجعت من الصفر')}
+ catch(e){if(e.code==='notfull'){toast('البطاقة مو كاملة الحين، يمكن انستخدم المشروب من قبل',true);return}if(e.code!=='auth')toast(errMsg(e),true)}}
 
 document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||!$('#page')?.contains(b))return;const a=b.dataset.a,id=b.dataset.id;
  if(a==='filter'){A.filter=b.dataset.v;renderOrders()}
@@ -109,6 +171,9 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b
  /* "done" is a link to WhatsApp: the browser opens the chat, we save the new status alongside */
  if(a==='done')setOrder(id,{status:'done'});
  if(a==='undo')setOrder(id,{status:'new'});
+ if(a==='ack')ackOut(id);
+ if(a==='redeem')redeemOn(id);
+ if(a==='sound'){const c=audio();if(c)c.resume().then(()=>{ding();soundBtn();toast('صوت التنبيهات شغّال ✓')}).catch(()=>{})}
  if(a==='logout')logout()});
 
 /* ================= drinks & menu ================= */
@@ -248,7 +313,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-d]')
  if(a==='undo'){A.work=null;A.dirty=false;listPane(A.dtab)}
  if(a==='savework'){b.disabled=true;const m=clone(A.menu);for(const k of ['addons','milks','sizes'])m[k]=A.work[k];
   if(await saveMenu(m,'تم الحفظ ✓')){A.work=null;A.dirty=false;listPane(A.dtab)}else b.disabled=false}});
-addEventListener('beforeunload',e=>{if(A.dirty||A.orderDirty){e.preventDefault();e.returnValue=''}});
+addEventListener('beforeunload',e=>{if(A.dirty||A.orderDirty||A.sdirty){e.preventDefault();e.returnValue=''}});
 
 /* ================= guided tours =================
    One thing on the page is lit up at a time, everything else is dimmed, and a speech bubble explains it.
@@ -389,7 +454,7 @@ ${isDemo()?'<p class="wnote">المشروبات اللي في المنيو ال�
 <div class="wnav"><button class="btn" data-z="back">→ رجوع</button><button class="btn p big" data-z="drink">يلا، أضيف مشروبي ←</button></div>
 <button class="lnk mut wskip" data-z="skip">${isDemo()?'بعدين، خلّ المشروبات التجريبية الحين':'عندي مشروبات من قبل، تخطَّ'}</button></div>`;
   if(s===4)h=`<div class="wbox wcenter">${M.catSVG('happy')}<h1>محلك جاهز! ♡</h1>${Z.drink?`<p>مشروبك صار في المنيو، وكذا يشوفه العميل:</p>${card(Z.drink)}`:''}
-<ul class="wtips"><li><b>ترتيب المشروبات:</b> من «المشروبات» اضغط «ترتيب المشروبات».</li><li><b>الإضافات والحليب والأحجام:</b> فيها أمثلة جاهزة. افتح أي واحد منها واضغط الزر الأصفر الكبير، ونشرح لك كيف تعدّلها.</li><li><b>اسم المحل والشعار:</b> تغيّرها متى ما تبي من «الحساب».</li><li><b>الطلبات:</b> توصلك في «الطلبات» مع صوت تنبيه.</li></ul>
+<ul class="wtips"><li><b>ترتيب المشروبات:</b> من «المشروبات» اضغط «ترتيب المشروبات».</li><li><b>الإضافات والحليب والأحجام:</b> فيها أمثلة جاهزة. افتح أي واحد منها واضغط الزر الأصفر الكبير، ونشرح لك كيف تعدّلها.</li><li><b>اسم المحل والشعار:</b> تغيّرها متى ما تبي من «الحساب».</li><li><b>الاستلام والتوصيل والدفع وموقع المحل وحجم الشعار:</b> من «الإعدادات».</li><li><b>الطلبات:</b> توصلك في «الطلبات» مع صوت تنبيه.</li></ul>
 <div class="wnav"><a class="btn" href="/" target="_blank" rel="noopener">افتح المتجر وشوفه ↗</a><button class="btn p big" data-z="finish">ابدأ ♡</button></div></div>`;
   el.innerHTML=h;el.scrollTop=0;
   if(s===1)setTimeout(()=>$('[data-b=ar]',el)?.focus(),60);else el.querySelector('.btn.p')?.focus({preventScroll:true})};
@@ -525,7 +590,7 @@ function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1
 <p class="lerr" id="pwerr" role="alert"></p><button class="btn p" type="submit">حفظ كلمة المرور</button></form></div>`;
  /* the store's name and logo */
  const bs=$('#brandsec'),bb={name:A.brand.name||'',ar:A.brand.ar||'',logo:A.brand.logo||'',done:true};
- const bdraw=()=>{bs.innerHTML=`<h3>محلك</h3><p class="hint">اسم المحل وشعاره يطلعون للعملاء فوق كل صفحة.</p>${brandForm(bb)}<div class="wnav" style="justify-content:flex-start"><button class="btn p" data-b="save">حفظ اسم المحل والشعار</button></div><button class="lnk wskip" data-b="rewiz">شغّل الإعداد والشرح من البداية</button>`};
+ const bdraw=()=>{bs.innerHTML=`<h3>محلك</h3><p class="hint">اسم المحل وشعاره يطلعون للعملاء فوق كل صفحة.</p>${brandForm(bb)}<div class="wnav" style="justify-content:flex-start"><button class="btn p" data-b="save">حفظ اسم المحل والشعار</button></div><p class="hint">تبي الشعار أكبر أو أصغر؟ غيّر حجمه من <a href="#settings">«الإعدادات»</a>.</p><button class="lnk wskip" data-b="rewiz">شغّل الإعداد والشرح من البداية</button>`};
  bdraw();bindBrand(bs,bb,bdraw);
  bs.addEventListener('click',async e=>{const t=e.target.closest('[data-b]');if(!t)return;
   if(t.dataset.b==='save'){if(!brandOK(bb,bs))return;if(bb.busy){toast('انتظر لين يخلص رفع الشعار');return}t.disabled=true;await saveBrand(bb,'تم الحفظ ✓ والعملاء يشوفون الاسم والشعار الجديد');t.disabled=false}
@@ -536,6 +601,136 @@ function renderAccount(){page().innerHTML=`<div class="ph1"><h1>الحساب</h1
   try{await api('password',{method:'POST',body:{current:f.cur.value,next:f.nw.value,user:u||undefined}});A.me=await api('me');toast('تم تغيير كلمة المرور ✓');renderAccount()}
   catch(x){er.textContent=x.code==='login'?'كلمة المرور الحالية غلط':errMsg(x)}})}
 async function logout(){if(!(await ask({title:'تسجيل الخروج؟',ok:'خروج'})))return;try{await api('logout',{method:'POST'})}catch(e){}A.me={setup:false,admin:false};A.orders=null;A.seen=null;showLogin()}
+
+/* ================= stamp cards =================
+   Every order gives the customer's phone number one stamp. A full card (8) means the next drink is free. */
+const FULL=8;
+function stampDots(n){return Array.from({length:FULL},(_,i)=>`<i class="${i<n?'st':''}">${i<n?M.pawSVG('#ff4f86'):''}</i>`).join('')}
+function renderStamps(){const p=page();
+ p.innerHTML=`<div class="ph1"><h1>بطاقات الأختام</h1><p>كل طلب يعطي العميل ختم على رقم جواله. لما تكمل ${FULL} أختام، مشروبه الجاي مجاني. هنا تشوف أختام كل عميل وتعدّلها، والعميل يشوف نفس العدد.</p></div>
+<button class="helpb" data-l="help">${ICO.help}<span><b>كيف تستخدم بطاقات الأختام؟</b><small>اضغط هنا ونشرح لك كل شي خطوة بخطوة</small></span><i aria-hidden="true">←</i></button>
+<label class="ssearch"><span class="hide">ابحث برقم الجوال</span><input type="search" id="sq" inputmode="tel" dir="ltr" placeholder="🔍 ابحث برقم الجوال" value="${esc(A.q)}" autocomplete="off"></label>
+<div id="slist">${A.cards?'':'<div class="tload">جاري التحميل… ♡</div>'}</div>`;
+ if(A.cards)drawCards();
+ loadCards().catch(e=>{if(A.page==='stamps'&&!A.cards)$('#slist').innerHTML=`<div class="empty">${esc(errMsg(e))}</div>`})}
+const cardMatch=(c,q)=>{if(!q)return true;const d=q.replace(/\D/g,'');if(!d)return (c.name||'').includes(q.trim());return c.key.includes(d)||c.key.includes(pkey(d))||String(c.phone).replace(/\D/g,'').includes(d)||('0'+c.key.slice(3)).includes(d)};
+function cardHTML(c){const full=c.stamps>=FULL;
+ return `<article class="lcard ${full?'full':''}" data-k="${esc(c.key)}"><div class="lh"><span><b class="lph" dir="ltr">${esc(c.phone)}</b><span class="lnm">${esc(c.name||'')}</span></span>${full?'<span class="lfull">🎁 له مشروب مجاني</span>':''}</div>
+<div class="scard lst" aria-hidden="true">${stampDots(c.stamps)}</div>
+<div class="lctl"><button class="btn ic" data-l="minus" aria-label="شيل ختم من ${esc(c.phone)}" ${c.stamps<=0?'disabled':''}>−</button><span class="lcount" aria-live="polite"><b>${c.stamps}</b> من ${FULL} أختام</span><button class="btn ic" data-l="plus" aria-label="زيد ختم لـ ${esc(c.phone)}" ${full?'disabled':''}>+</button></div>
+<p class="lstats"><span>كسب مشروب مجاني: <b>${c.earned||0}</b> ${c.earned===1?'مرة':'مرات'}</span><span>استخدمه: <b>${c.redeemed||0}</b> ${c.redeemed===1?'مرة':'مرات'}</span><span>الطلبات: <b>${c.orders||0}</b></span></p>
+<div class="lact">${full?'<button class="btn g" data-l="redeem">🎁 استخدم المشروب المجاني</button>':''}<button class="lnk red" data-l="reset" ${c.stamps?'':'disabled'}>تصفير الأختام</button></div></article>`}
+function drawCards(){const box=$('#slist');if(!box||!A.cards)return;const list=A.cards.filter(c=>cardMatch(c,A.q)),full=A.cards.filter(c=>c.stamps>=FULL).length;
+ if(!A.cards.length){box.innerHTML=`<div class="empty">${M.catSVG('hi')}ما فيه عملاء بعد. أول ما يطلب أحد، يطلع رقمه هنا مع أختامه ♡</div>`;return}
+ box.innerHTML=`<p class="lsum">${A.cards.length} ${A.cards.length===1?'عميل':'عملاء'}${full?` · ${full} عندهم مشروب مجاني الحين`:''}</p>`+(list.length?`<div class="lgrid">${list.slice(0,A.climit).map(cardHTML).join('')}</div>${list.length>A.climit?'<div class="more"><button class="btn" data-l="more">عرض المزيد</button></div>':''}`
+  :`<div class="empty">ما لقينا رقم فيه «${esc(A.q)}»</div>`)}
+/* every change saves straight away; changes to the same customer go one after the other */
+const cardQ={},cardN={},cardT={};
+/* a fresh list from the server (asked for at time t0), except customers changed here since then keep what's on screen */
+const mergeCards=(list,t0)=>(list||[]).map(s=>cardN[s.key]>0||cardT[s.key]>=t0?(A.cards||[]).find(x=>x.key===s.key)||s:s);
+function loadCards(){const t0=Date.now();return api('loyalty').then(j=>{A.cards=mergeCards(j.cards,t0);if(A.page==='stamps')drawCards()})}
+function saveCard(key,body,undo){cardN[key]=(cardN[key]||0)+1;cardT[key]=Date.now();const cur=()=>A.cards.find(x=>x.key===key);
+ /* the server's answer only replaces what's on screen once no newer tap is still waiting to save */
+ cardQ[key]=(cardQ[key]||Promise.resolve()).then(()=>api('loyalty/'+key,{method:'POST',body})).then(j=>{if(--cardN[key]===0&&j.card){const c=cur();if(c){Object.assign(c,j.card);redrawCard(key)}}})
+  .catch(e=>{if(--cardN[key]===0){const c=cur();if(c&&undo)Object.assign(c,undo);cardT[key]=0;loadCards().catch(()=>{})}if(e.code!=='auth')toast(errMsg(e),true)});return cardQ[key]}
+function redrawCard(key){const el=$(`.lcard[data-k="${key}"]`),c=A.cards.find(x=>x.key===key);if(el&&c){const f=document.activeElement?.dataset?.l;el.outerHTML=cardHTML(c);if(f)$(`.lcard[data-k="${key}"] [data-l="${f}"]`)?.focus()}}
+document.addEventListener('input',e=>{if(e.target.id==='sq'){A.q=e.target.value;A.climit=60;drawCards()}});
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-l]');if(!b||!$('#page')?.contains(b))return;const a=b.dataset.l;
+ if(a==='help')return tour(stampSteps());
+ if(a==='more'){A.climit+=60;drawCards();return}
+ const key=b.closest('.lcard')?.dataset.k,c=A.cards?.find(x=>x.key===key);if(!c)return;const undo={...c};
+ if(a==='plus'||a==='minus'){const n=Math.max(0,Math.min(FULL,c.stamps+(a==='plus'?1:-1)));if(n===c.stamps)return;c.stamps=n;redrawCard(key);saveCard(key,{stamps:n},undo)}
+ if(a==='reset'){if(!(await ask({title:'تصفّر أختام '+(c.name||c.phone)+'؟',body:'البطاقة ترجع صفر أختام.',ok:'صفّر',danger:true})))return;c.stamps=0;redrawCard(key);saveCard(key,{reset:true},undo).then(()=>toast('تم التصفير ✓'))}
+ if(a==='redeem'){if(!(await ask({title:'تستخدم المشروب المجاني لـ'+(c.name||c.phone)+'؟',body:'البطاقة ترجع تبدأ من جديد. لا تنسى تخصم سعر مشروب واحد من حسابه.',ok:'استخدمه'})))return;c.stamps=Math.max(0,c.stamps-FULL);c.redeemed=(c.redeemed||0)+1;redrawCard(key);saveCard(key,{redeem:true},undo).then(()=>toast('تم ✓ استخدم مشروبه المجاني'))}});
+function stampSteps(){return [
+ {title:'بطاقات الأختام',body:`<p>كل ما يطلب العميل، ياخذ ختم على رقم جواله. لما تكمل ${FULL} أختام يصير له مشروب مجاني.</p><p class="hx-tip">العميل يشوف بطاقته بعد ما يرسل طلبه، بنفس العدد اللي هنا.</p>`},
+ {el:'#sq',title:'دوّر على عميل',body:'<p>اكتب رقم جواله أو جزء منه، وتطلع بطاقته.</p>'},
+ {el:()=>$('.lctl'),title:'زيد أو نقّص الأختام',body:'<p>اضغط <b>+</b> أو <b>−</b>. التغيير ينحفظ على طول، ما تحتاج زر حفظ.</p>'},
+ {el:()=>$('.lstats'),title:'كم مرة أخذ مشروب مجاني',body:'<p>«كسب» يعني كم مرة كمّل البطاقة، و«استخدمه» كم مرة أخذ المشروب المجاني.</p>'},
+ {el:()=>$('.lact'),title:'المشروب المجاني والتصفير',body:'<p>لما تكمل البطاقة يطلع زر <b>«استخدم المشروب المجاني»</b>. اضغطه لما تعطيه المشروب، والبطاقة ترجع من الصفر.</p><p class="hx-tip">ويطلع لك نفس الزر على الطلب نفسه في صفحة الطلبات.</p>'}]}
+
+/* ================= store settings: logo size, pickup/delivery, payment, location ================= */
+const PAYICO={cash:'💵',card:'💳',transfer:'🏦',applepay:''};
+const DEF_SET={pickup:true,delivery:true,fee:0,pay:['cash','card'],transfer:'',loc:null,logoSize:1};
+const SIZES=[['صغير',.8],['وسط',1],['كبير',1.3]];
+function renderSettings(){const W=A.sw||(A.sw=Object.assign(clone(DEF_SET),clone(A.set||{}),{note:A.set?.loc?.note||''}));
+ const mode=W.pickup&&W.delivery?'both':W.delivery?'delivery':'pickup';
+ page().innerHTML=`<div class="ph1"><h1>إعدادات المحل</h1><p>كيف يستلم العميل طلبه، وكيف يدفع، ووين محلك، وحجم الشعار. عدّل اللي تبي، وبعدين اضغط «حفظ الإعدادات».</p></div>
+<button class="helpb" data-s2="help">${ICO.help}<span><b>كيف تستخدم الإعدادات؟</b><small>اضغط هنا ونشرح لك كل شي خطوة بخطوة</small></span><i aria-hidden="true">←</i></button>
+<div class="setg">
+<section class="sec" id="s-modes"><h3><i>1</i>كيف يستلم العميل طلبه؟</h3><p class="hint">العميل يشوف بس الطريقة اللي تختارها.</p>
+<div class="rad">${[['both','الاثنين','العميل يختار استلام أو توصيل'],['pickup','استلام من المحل فقط','بدون توصيل'],['delivery','توصيل فقط','بدون استلام من المحل']].map(([v,l,s])=>`<label><input type="radio" name="smode" value="${v}" ${mode===v?'checked':''}><span>${l}<small>${s}</small></span></label>`).join('')}</div>
+<div id="feebox" class="${W.delivery?'':'hide'}" style="margin-top:12px"><label class="fld">رسوم التوصيل (ر.س)<input type="number" min="0" step="0.5" inputmode="decimal" dir="ltr" data-s2="fee" value="${W.fee}"></label><p class="hint">تنضاف على فاتورة العميل في سطر لحالها، وتطلع في الطلب ورسالة الواتساب. خلها 0 إذا التوصيل مجاني.</p></div></section>
+<section class="sec" id="s-pay"><h3><i>2</i>طرق الدفع اللي تقبلها</h3><p class="hint">العميل يشوف بس الطرق اللي عليها ✓. لازم تختار وحدة على الأقل.</p>
+<div class="sizes paysel">${M.PAYS.map(k=>`<label class="tog"><input type="checkbox" data-pay="${k}" ${W.pay.includes(k)?'checked':''}><span class="tk">✓</span><span class="pico">${PAYICO[k]||'<b class="apl">Pay</b>'}</span>${PAYL[k]}<small>${k==='transfer'?'قبل الاستلام':W.delivery&&!W.pickup?'عند التوصيل':'عند الاستلام'}</small></label>`).join('')}</div><p class="lerr" id="payerr"></p>
+<div id="trbox" class="${W.pay.includes('transfer')?'':'hide'}" style="margin-top:10px"><label class="fld">بيانات التحويل اللي يشوفها العميل<textarea data-s2="transfer" rows="3" maxlength="400" placeholder="اسم البنك&#10;رقم الآيبان: SA…&#10;اسم صاحب الحساب">${esc(W.transfer)}</textarea></label></div></section>
+<section class="sec" id="s-loc"><h3><i>3</i>موقع المحل</h3><p class="hint">يطلع للعميل لما يختار «استلام»، مع أزرار تفتح الخريطة في جواله.</p>
+<button class="btn" data-s2="here">📍 أنا في المحل الحين، استخدم موقعي</button>
+<label class="fld" style="margin-top:12px">أو الصق رابط قوقل ماب أو الإحداثيات<span class="lrow"><input id="maplink" dir="ltr" placeholder="https://maps.app.goo.gl/…" autocomplete="off"><button type="button" class="btn" data-s2="link">حط الموقع</button></span></label>
+<p class="hint">أو اضغط على الخريطة في مكان المحل بالضبط. تقدر تسحب الدبوس بعدين.</p>
+<div id="lmap" class="lmap"></div><p class="lerr" id="locerr" role="alert"></p>
+<label class="fld">وصف المكان (اختياري)<input data-s2="note" maxlength="160" value="${esc(W.note)}" placeholder="مثال: جنب صيدلية النهدي، الباب الأخضر"></label>
+<div id="locprev"></div></section>
+<section class="sec" id="s-logo"><h3><i>4</i>حجم الشعار</h3><p class="hint">كبّر أو صغّر شعار المحل. يتغيّر في كل مكان يطلع فيه الشعار في الموقع ولوحة التحكم.</p>
+<div class="lsz"><div class="seg2" role="group" aria-label="حجم الشعار">${SIZES.map(([l,v])=>`<button type="button" data-s2="lsz" data-v="${v}" class="${Math.abs(W.logoSize-v)<.01?'on':''}">${l}</button>`).join('')}</div>
+<label class="lrange"><span>أصغر</span><input type="range" min="0.7" max="1.6" step="0.05" data-s2="logoSize" value="${W.logoSize}" aria-label="حجم الشعار"><span>أكبر</span></label></div>
+<h4 class="bsub">كذا يطلع للعميل:</h4><div id="lgprev"></div></section>
+</div>
+<div class="savebar ${A.sdirty?'':'hide'}" id="ssbar"><span>عندك تغييرات ما انحفظت</span><button class="btn" data-s2="undo">تراجع</button><button class="btn p" data-s2="save">حفظ الإعدادات</button></div>`;
+ logoPrev();locPrev();initMap()}
+function sDirty(){A.sdirty=true;$('#ssbar')?.classList.remove('hide')}
+function logoPrev(){const W=A.sw,b=$('#lgprev');if(!b)return;b.innerHTML=brandPreview({name:A.brand.name||'',ar:A.brand.ar||'',logo:A.brand.logo||''});b.firstElementChild.style.setProperty('--lgs',W.logoSize);
+ $$('[data-s2=lsz]').forEach(x=>x.classList.toggle('on',Math.abs(W.logoSize-+x.dataset.v)<.01))}
+function locPrev(){const W=A.sw,b=$('#locprev');if(!b)return;
+ if(!W.loc){b.innerHTML='<p class="hint" style="margin:0">ما حددت موقع المحل بعد. بدون موقع، العميل يشوف «استلم من كاونتر المحل» بس.</p>';return}
+ const m=M.mapLinks(W.loc);b.innerHTML=`<h4 class="bsub">كذا يشوفه العميل لما يختار «استلام»:</h4><div class="lprev"><b>استلم طلبك من هنا ♡</b>${W.note?`<span>${esc(W.note)}</span>`:''}<div class="lbtns"><a class="btn" href="${esc(m.g)}" target="_blank" rel="noopener">📍 قوقل ماب</a><a class="btn" href="${esc(m.a)}" target="_blank" rel="noopener">🧭 خرائط أبل</a></div></div><button class="lnk red" data-s2="noloc">شيل الموقع</button>`}
+/* the map comes from the internet only when this page opens */
+let LP=null;
+const leaflet=()=>LP||(LP=new Promise((res,rej)=>{const c=document.createElement('link');c.rel='stylesheet';c.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.appendChild(c);
+ const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';s.onload=()=>window.L?res(window.L):rej();s.onerror=()=>{LP=null;s.remove();rej()};document.head.appendChild(s)}));
+const MAP={map:null,mk:null};
+function setLoc(lat,lng,zoom){const W=A.sw;if(!W)return;W.loc={lat:Math.round(lat*1e6)/1e6,lng:Math.round(lng*1e6)/1e6};$('#locerr')&&($('#locerr').textContent='');sDirty();locPrev();
+ const L=window.L;if(MAP.map&&L){if(!MAP.mk){MAP.mk=L.marker([lat,lng],{icon:pinIcon(),draggable:true}).addTo(MAP.map);MAP.mk.on('dragend',()=>{const p=MAP.mk.getLatLng();setLoc(p.lat,p.lng)})}else MAP.mk.setLatLng([lat,lng]);if(zoom)MAP.map.setView([lat,lng],17)}}
+const pinIcon=()=>window.L.divIcon({className:'pin',html:'<span>📍</span>',iconSize:[44,44],iconAnchor:[22,40]});
+async function initMap(){const el=$('#lmap');if(!el)return;MAP.map=null;MAP.mk=null;let L;
+ try{L=await leaflet()}catch(e){el.innerHTML='<p class="hint" style="padding:14px">ما قدرنا نفتح الخريطة. تقدر تلصق رابط قوقل ماب فوق، أو تستخدم موقعك.</p>';return}
+ if(!el.isConnected||A.page!=='settings')return;const W=A.sw,c=W.loc||{lat:24.7136,lng:46.6753};
+ const map=L.map(el,{scrollWheelZoom:false,tap:true}).setView([c.lat,c.lng],W.loc?16:11);MAP.map=map;
+ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+ if(W.loc){MAP.mk=L.marker([W.loc.lat,W.loc.lng],{icon:pinIcon(),draggable:true}).addTo(map);MAP.mk.on('dragend',()=>{const p=MAP.mk.getLatLng();setLoc(p.lat,p.lng)})}
+ map.on('click',e=>setLoc(e.latlng.lat,e.latlng.lng));setTimeout(()=>map.invalidateSize(),250)}
+/* a pasted link or "24.71, 46.67": the pin is often right in the link; short links are opened by the server */
+function coordsIn(t){try{t=decodeURIComponent(t)}catch(e){}for(const p of [/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/,/[?&](?:q|query|ll|sll|center|destination|daddr)=(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/,/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/,/^\s*(-?\d{1,2}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)\s*$/]){const m=t.match(p);if(m&&Math.abs(+m[1])<=90&&Math.abs(+m[2])<=180)return {lat:+m[1],lng:+m[2]}}return null}
+document.addEventListener('input',e=>{const t=e.target;if(!A.sw||!$('#page')?.contains(t))return;const W=A.sw;
+ if(t.name==='smode'){W.pickup=t.value!=='delivery';W.delivery=t.value!=='pickup';$('#feebox').classList.toggle('hide',!W.delivery);sDirty()}
+ if(t.dataset.pay){W.pay=M.PAYS.filter(k=>$(`[data-pay="${k}"]`)?.checked);$('#trbox').classList.toggle('hide',!W.pay.includes('transfer'));$('#payerr').textContent=W.pay.length?'':'لازم تختار طريقة دفع وحدة على الأقل';sDirty()}
+ const k=t.dataset.s2;if(!k)return;
+ if(k==='fee'){W.fee=Math.max(0,parseFloat(t.value)||0);sDirty()}
+ if(k==='transfer'){W.transfer=t.value;sDirty()}
+ if(k==='note'){W.note=t.value;sDirty();locPrev()}
+ if(k==='logoSize'){W.logoSize=+t.value;sDirty();logoPrev()}});
+document.addEventListener('change',e=>{if(e.target.name==='smode'||e.target.dataset?.pay)e.target.dispatchEvent(new Event('input',{bubbles:true}))});
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-s2]');if(!b||!$('#page')?.contains(b)||b.tagName==='INPUT'||b.tagName==='TEXTAREA')return;const a=b.dataset.s2,W=A.sw;if(!W)return;
+ if(a==='help')return tour(settingSteps());
+ if(a==='lsz'){W.logoSize=+b.dataset.v;$('[data-s2=logoSize]').value=W.logoSize;sDirty();logoPrev()}
+ if(a==='noloc'){W.loc=null;if(MAP.mk){MAP.mk.remove();MAP.mk=null}sDirty();locPrev()}
+ if(a==='here'){const er=$('#locerr');if(!navigator.geolocation){er.textContent='جهازك ما يقدر يحدد الموقع. الصق رابط قوقل ماب بدالها.';return}b.disabled=true;er.textContent='';
+  navigator.geolocation.getCurrentPosition(p=>{b.disabled=false;setLoc(p.coords.latitude,p.coords.longitude,true);toast('تم تحديد موقعك ✓ تأكد إن الدبوس على المحل')},()=>{b.disabled=false;er.textContent='ما قدرنا نعرف موقعك. اسمح للمتصفح يعرف الموقع، أو الصق رابط قوقل ماب.'},{enableHighAccuracy:true,timeout:15000})}
+ if(a==='link'){const v=$('#maplink').value.trim(),er=$('#locerr');er.textContent='';if(!v){er.textContent='الصق الرابط في الخانة أول';return}
+  let c=coordsIn(v);if(!c&&/^https?:\/\//i.test(v)){b.disabled=true;try{c=await api('maplink',{method:'POST',body:{url:v}})}catch(x){if(x.code==='auth')return}b.disabled=false}
+  if(c&&Number.isFinite(c.lat)){setLoc(c.lat,c.lng,true);$('#maplink').value='';toast('تم ✓ شيك إن الدبوس على المحل')}else er.textContent='ما لقينا الموقع في هذا الرابط. جرّب تضغط على مكان المحل في الخريطة.'}
+ if(a==='undo'){A.sw=null;A.sdirty=false;renderSettings()}
+ if(a==='save'){if(!W.pay.length){$('#payerr').textContent='لازم تختار طريقة دفع وحدة على الأقل';$('#s-pay').scrollIntoView({block:'center',behavior:'smooth'});return}
+  b.disabled=true;const body={pickup:W.pickup,delivery:W.delivery,fee:W.fee,pay:W.pay,transfer:W.transfer,logoSize:W.logoSize,loc:W.loc?{...W.loc,note:W.note}:null};
+  try{const j=await api('settings',{method:'PUT',body});A.set=j.settings;M.setSettings(A.set);A.sw=null;A.sdirty=false;renderSettings();toast('تم الحفظ ✓ والعملاء يشوفون التغيير الحين')}
+  catch(x){b.disabled=false;if(x.code!=='auth')toast(errMsg(x),true)}}});
+function settingSteps(){return [
+ {el:'#s-modes .rad',title:'استلام أو توصيل؟',body:'<p>اختار إذا محلك يسوي استلام من المحل، أو توصيل، أو الاثنين. العميل يشوف بس اللي تختاره.</p>'},
+ {el:()=>$('#feebox:not(.hide)')||$('#s-modes'),title:'رسوم التوصيل',body:'<p>المبلغ اللي ينضاف على كل طلب توصيل. يطلع للعميل في سطر لحاله في الفاتورة، ويطلع لك في الطلب ورسالة الواتساب.</p>'},
+ {el:'.paysel',title:'طرق الدفع',body:'<p>حط ✓ على الطرق اللي تقبلها. لو اخترت <b>تحويل بنكي</b>، اكتب بيانات حسابك في الخانة اللي تطلع، والعميل يشوفها وقت الطلب.</p>'},
+ {el:'#lmap',title:'موقع المحل',body:'<p>اضغط على مكان محلك في الخريطة، أو اضغط <b>«أنا في المحل الحين»</b> وأنت في المحل، أو الصق رابط قوقل ماب.</p><p class="hx-tip">العميل اللي يختار «استلام» يشوف الخريطة وأزرار تفتحها في جواله.</p>'},
+ {el:'#s-logo',title:'حجم الشعار',body:'<p>اختار صغير أو وسط أو كبير، أو حرّك الشريط. تشوف الشكل تحت على طول.</p>'},
+ {el:()=>$('#ssbar:not(.hide)')||$('#s-logo'),title:'لا تنسى تحفظ',body:'<p>التغييرات ما توصل للعملاء إلا لما تضغط <b>«حفظ الإعدادات»</b>. الزر يطلع تحت أول ما تغيّر أي شي.</p>'}]}
 
 /* ================= go ================= */
 (async()=>{try{const[me,shop]=await Promise.all([api('me'),api('shop').catch(()=>null)]);A.me=me;if(shop)M.setBrand(shop.brand);if(A.me.admin)await start();else showLogin()}catch(e){root.innerHTML=`<div class="login"><div class="lbox">${M.catSVG('hi')}<h1>ما قدرنا نفتح الإدارة</h1><p>${esc(errMsg(e))}</p><button class="btn p" onclick="location.reload()">حاول مرة ثانية</button></div></div>`}})();

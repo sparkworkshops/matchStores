@@ -67,10 +67,19 @@ const TX={
  back:['Back','رجوع'],prev:['Previous drink','المشروب السابق'],next:['Next drink','المشروب التالي'],home:['{shop} home','الرئيسية'],
  cartLabel:['Open my cart','افتح السلة'],langBtn:['ع','EN'],langLabel:['التبديل للعربية','Switch to English'],
  waOrder:['Hi {name} ♡ This is {shop} about your order {order}:\n{items}\nTotal: {total}','هلا {name} ♡ معك {shop} بخصوص طلبك {order}:\n{items}\nالمجموع: {total}'],
- waReady:['Hi {name}! Your order is ready! ♡ ({order})','هلا {name}! طلبك جاهز! ♡ ({order})']};
+ waReady:['Hi {name}! Your order is ready! ♡ ({order})','هلا {name}! طلبك جاهز! ♡ ({order})'],
+ waWay:['Hi {name}! Your order is on the way! ♡ ({order})','هلا {name}! طلبك في الطريق! ♡ ({order})'],
+ waFee:['Delivery fee: {fee}','رسوم التوصيل: {fee}'],
+ subtotal:['Drinks','المشروبات'],feeL:['Delivery fee','رسوم التوصيل'],feeNote:['Delivery fee: {fee}, added to your total','رسوم التوصيل: {fee}، تنضاف على مجموعك'],
+ transfer:['Bank transfer','تحويل بنكي'],applepay:['Apple Pay','Apple Pay'],transferNote:['Please transfer the total to:','حوّل المبلغ على:'],
+ whereH:['Pick up from here ♡','استلم طلبك من هنا ♡'],openG:['Google Maps','قوقل ماب'],openA:['Apple Maps','خرائط أبل'],
+ outside:['I’m outside 🚗','أنا برا المحل 🚗'],outsideHint:['When you arrive, tap the button and we’ll bring your order out to you ♡','لما توصل اضغط الزر ونطلع لك طلبك ♡'],
+ notified:['Store notified ✓','وصل الخبر للمحل ✓'],outsideErr:['We couldn’t reach the store. Try again.','ما قدرنا نوصل للمحل. جرّب مرة ثانية.'],
+ myOrder:['Your order {order}','طلبك {order}'],seeOrder:['See my order','شوف طلبي'],
+ eSettings:['The shop just updated its options, please check your order again ♡','المحل غيّر الخيارات الحين، راجع طلبك مرة ثانية ♡']};
 
 /* what each {word} means, for the admin text editor */
-const TOKENS={shop:'اسم المحل',shopA:'أول جزء من اسم المحل',shopB:'باقي اسم المحل',n:'المبلغ',drink:'اسم المشروب',max:'أكثر عدد',name:'اسم العميل',from:'من الساعة',to:'إلى الساعة',count:'عدد الأختام الباقية',total:'المجموع',order:'رقم الطلب',items:'قائمة المشروبات'};
+const TOKENS={shop:'اسم المحل',shopA:'أول جزء من اسم المحل',shopB:'باقي اسم المحل',n:'المبلغ',drink:'اسم المشروب',max:'أكثر عدد',name:'اسم العميل',from:'من الساعة',to:'إلى الساعة',count:'عدد الأختام الباقية',total:'المجموع',order:'رقم الطلب',items:'قائمة المشروبات',fee:'رسوم التوصيل'};
 
 let OV={};/* the admin's published text changes: {key:[english, arabic]} */
 const ix=()=>LANG==='ar'?1:0;
@@ -100,6 +109,21 @@ function applyLang(){const h=document.documentElement;h.lang=LANG;h.dir=LANG==='
 function setBrand(b){BRAND={name:String(b?.name||''),ar:String(b?.ar||''),logo:String(b?.logo||'')};const l=document.querySelector('link[rel=icon]');if(l)l.href=BRAND.logo||ICON0;if(!LIB)applyLang()}
 if(!LIB)applyLang();
 
+/* ================= how the store takes orders (set by the owner in the admin) ================= */
+const PAYS=['cash','card','transfer','applepay'];
+let SET={pickup:true,delivery:true,fee:0,pay:['cash','card'],transfer:'',loc:null,logoSize:1};
+const modesOn=()=>{const m=['pickup','delivery'].filter(k=>SET[k]);return m.length?m:['pickup']};
+const paysOn=()=>{const p=PAYS.filter(k=>(SET.pay||[]).includes(k));return p.length?p:['cash']};
+/* the logo is drawn at the size the owner picked, everywhere it shows */
+const setLogoSize=n=>{n=Math.min(1.6,Math.max(.7,+n||1));document.documentElement.style.setProperty('--lgs',String(n))};
+function setSettings(s){SET=Object.assign({pickup:true,delivery:true,fee:0,pay:['cash','card'],transfer:'',loc:null,logoSize:1},s||{});setLogoSize(SET.logoSize)}
+/* the store's pin: a little map and buttons that open the phone's maps app */
+const mapLinks=l=>({g:`https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`,a:`https://maps.apple.com/?ll=${l.lat},${l.lng}&q=${encodeURIComponent(bName(LANG==='ar'?1:0))}`});
+/* a still map: the few map squares around the pin, drawn right on the page */
+const mapEmbed=(l,z=16)=>{const n=2**z,x=(l.lng+180)/360*n,r=l.lat*Math.PI/180,y=(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n,tx=Math.floor(x),ty=Math.floor(y),fx=(x-tx)*256,fy=(y-ty)*256;let h='';
+ for(let dy=-1;dy<=1;dy++)for(let dx=-2;dx<=2;dx++)h+=`<img src="https://tile.openstreetmap.org/${z}/${tx+dx}/${ty+dy}.png" style="left:${Math.round(dx*256-fx)}px;top:${Math.round(dy*256-fy)}px" alt="" loading="lazy" draggable="false">`;
+ return `<span class="tiles" dir="ltr">${h}</span><span class="tpin" aria-hidden="true">📍</span><span class="tattr" dir="ltr">© OpenStreetMap</span>`};
+
 /* ================= menu (comes from the server) ================= */
 let STORE={drinks:[],sizes:[],milks:[],addons:[]};
 const D=id=>STORE.drinks.find(d=>d.id===id);
@@ -118,7 +142,7 @@ const readyWin=()=>{const a=new Date(Date.now()+30*60000);a.setSeconds(0,0);a.se
 function newOrder(drink){const d=D(drink),ss=dSizes(d);return {drink:drink||null,size:(ss.find(s=>s.id==='m')||ss[0]||{}).id,milk:STORE.milks[0]?.id||null,ad:{},qty:1}}
 const savedPay=lsGet('mm-pay',{});
 const S={step:'land',o:newOrder(null),cf:0,cart:EDIT?[]:lsGet('mm-cart',[]),edit:null,
- pay:{mode:savedPay.mode==='delivery'?'delivery':'pickup',method:savedPay.method==='card'?'card':'cash',name:savedPay.name||'',phone:savedPay.phone||'',addr:savedPay.addr||'',notes:''},
+ pay:{mode:savedPay.mode==='delivery'?'delivery':'pickup',method:PAYS.includes(savedPay.method)?savedPay.method:'cash',name:savedPay.name||'',phone:savedPay.phone||'',addr:savedPay.addr||'',notes:''},
  paid:false,last:null,sending:false,caught:lsGet('mm-caught',0),paw:lsGet('mm-paw',false),stamps:lsGet('mm-stamps',0)};
 const qty=id=>S.o.ad[id]||0;
 const chosen=(o=S.o)=>Object.entries(o.ad||{}).map(([k,q])=>[A(k),q]).filter(([a,q])=>a&&q>0);
@@ -132,8 +156,10 @@ function fixCart(){S.cart=(Array.isArray(S.cart)?S.cart:[]).filter(c=>c&&D(c.dri
  return {drink:c.drink,size:ss.includes(c.size)?c.size:newOrder(c.drink).size,milk:MK(c.milk)?c.milk:(STORE.milks[0]?.id||null),ad,qty:Math.max(1,Math.min(20,c.qty|0||1))}});saveCart()}
 /* the order as the server and WhatsApp messages describe it */
 const snap=cart=>cart.map(c=>{const d=D(c.drink),s=SZ(c.size),m=MK(c.milk);return {drink:d.id,name:d.name,ar:d.ar,img:d.img,color:d.color,under:d.under||'',size:{name:s.name,ar:s.ar},milk:m?{name:m.name,ar:m.ar}:null,addons:chosen(c).map(([a,q])=>({name:a.name,ar:a.ar,q,price:a.price})),qty:c.qty,unit:total(c),line:total(c)*c.qty}});
-function waItems(o,i){const n=x=>(i&&x.ar)?x.ar:x.name;return o.items.map(it=>{const p=[n(it.size)];if(it.milk)p.push(n(it.milk));(it.addons||[]).forEach(a=>p.push(n(a)+(a.q>1?' ×'+a.q:'')));return `• ${it.qty}× ${n(it)} (${p.join(i?'، ':', ')})`}).join('\n')}
-function waText(k,o){const i=o.lang==='en'?0:1;return fill(rawL(k,i),{name:o.name,order:orderNo(o.no),items:waItems(o,i),total:moneyL(o.total,i)},String)}
+/* delivery orders get their fee as its own line under the drinks */
+function waItems(o,i){const n=x=>(i&&x.ar)?x.ar:x.name;const l=o.items.map(it=>{const p=[n(it.size)];if(it.milk)p.push(n(it.milk));(it.addons||[]).forEach(a=>p.push(n(a)+(a.q>1?' ×'+a.q:'')));return `• ${it.qty}× ${n(it)} (${p.join(i?'، ':', ')})`});
+ if(+o.fee>0)l.push('• '+fill(rawL('waFee',i),{fee:moneyL(o.fee,i)},String));return l.join('\n')}
+function waText(k,o){const i=o.lang==='en'?0:1;return fill(rawL(k,i),{name:o.name,order:orderNo(o.no),items:waItems(o,i),total:moneyL(o.total,i),fee:moneyL(o.fee||0,i)},String)}
 
 /* ================= drawings ================= */
 let uid=0;
@@ -222,7 +248,7 @@ const BAG=`<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h18l-2 16H9
 
 /* the admin page borrows these */
 window.MM={TX,TOKENS,esc,drinkArt,icon,cupSVG,catSVG,LOGO,logoHTML,pawSVG,waText,moneyL,numStr,orderNo,bName,halves,DEF_NAME,
- setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},setBrand,getBrand:()=>BRAND,rawL,lum,onC};
+ setTexts:o=>{OV=o||{}},setMenu:m=>{STORE=m},setBrand,getBrand:()=>BRAND,rawL,lum,onC,setSettings,setLogoSize,mapLinks,mapEmbed,PAYS};
 if(LIB){/* library only */}else{
 
 /* ================= shared bits ================= */
@@ -236,12 +262,22 @@ const sizeSeg=()=>{const ss=dSizes(D(S.o.drink)),all=STORE.sizes;return ss.map(s
 const LIVE={cup:()=>cupSVG(),total:()=>money(total()),tags:tagsHTML,milk:milkChips,size:sizeSeg};
 const prog=()=>{const st=['drink','machine','cart','pay'],n=['pick','make','cartS','payS'],i=st.indexOf(S.step);return `<div class="prog">${n.map((k,j)=>`${j?'<i></i>':''}<span class="${j===i?'on':j<i?'done':''}"${X(k)}>${j<i?'✓ ':''}${t(k)}</span>`).join('')}</div>`};
 const topbar=()=>`<header class="top">${S.step!=='land'&&!S.paid?`<button class="pill backb" data-act="back" aria-label="${t('back')}">${LANG==='ar'?'›':'‹'}</button>`:''}<button class="logo" data-act="logo" aria-label="${t('home')}">${logoHTML()}<b${X('brand')}>${t('brand')}</b></button><span class="pill paws" title="${t('caught')}" aria-label="${t('caught')}: ${S.caught}">${pawSVG()}<span id="caught">${S.caught}</span></span><button class="pill cartp" id="cartp" data-act="gocart" aria-label="${t('cartLabel')}">${BAG}<span class="n" id="cartn">${cartCount()||''}</span></button><button class="pill lang" data-act="lang" aria-label="${t('langLabel')}" lang="${LANG==='ar'?'en':'ar'}"${X('langBtn')}>${t('langBtn')}</button></header>`;
+/* the last order this phone sent, kept so a pickup customer can still say "I'm outside" after closing the page */
+const LASTK='mm-last',PENDK='mm-pending',OUT_COOL=45000;
+const recentPickup=()=>{if(EDIT)return null;const L=lsGet(LASTK,null);return L&&L.mode==='pickup'&&L.id&&L.cid&&Date.now()-(+L.at||0)<3*3600e3?L:null};
+const outCool=L=>!!(L&&L.outAt&&Date.now()-L.outAt<OUT_COOL);
+const outBtn=L=>{const c=outCool(L);return `<button class="cta outb ${c?'sent':''}" data-act="outside" ${c?'disabled':''}${X(c?'notified':'outside')}>${c?t('notified'):t('outside')}</button>`};
+const payFee=()=>S.pay.mode==='delivery'&&(EDIT||SET.delivery)?(+SET.fee||0):0;
+const payTotal=()=>cartTotal()+payFee();
+function locCard(){const l=SET.loc;if(!l)return '';const m=mapLinks(l);
+ return `<div class="where"><h3${X('whereH')}>${t('whereH')}</h3><a class="wmap" href="${esc(m.g)}" target="_blank" rel="noopener" aria-label="${esc(tp('openG'))}">${mapEmbed(l)}</a>${l.note?`<p class="wnote">${esc(l.note)}</p>`:''}<div class="mapbtns"><a class="ghost" href="${esc(m.g)}" target="_blank" rel="noopener"${X('openG')}>📍 ${t('openG')}</a><a class="ghost" href="${esc(m.a)}" target="_blank" rel="noopener"${X('openA')}>🧭 ${t('openA')}</a></div></div>`}
 /* bottom bar: k = label text key */
 const bbar=({k,act,small,amount,live,flat})=>`<div class="bbar ${flat?'flat':''}"><div class="tot"><small${X(small)}>${t(small)}</small><b ${live?'data-live="total"':''} id="btot">${money(amount)}</b></div><button class="cta wig" data-act="${act}"${X(k)}>${t(k)}</button></div>`;
 const fromPrice=d=>d?+d.price+Math.min(...dSizes(d).map(s=>+s.add||0)):0;
 
 /* ================= views ================= */
-function landView(){const ds=STORE.drinks;return `
+function landView(){const ds=STORE.drinks,L=recentPickup();return `
+${L?`<div class="lastbar"><div><b>${t('myOrder',{order:`<bdi dir="ltr">${esc(orderNo(L.no))}</bdi>`})}</b><button class="lnk" data-act="myorder">${t('seeOrder')}</button></div>${outBtn(L)}</div>`:''}
 <div class="lace"></div>
 <div class="ticker"><div${X('tick1')}>${t('tick1').repeat(4)}</div></div>
 <section class="hero ging">
@@ -315,24 +351,29 @@ ${c.length?`<div class="cartl">${c.map((it,i)=>{const d=D(it.drink);return `<div
 <div class="addmore"><button class="ghost" data-act="more"${X('addAnother')}>${t('addAnother')}</button></div>
 ${bbar({k:'goCheckout',act:'topay',small:'yourTotal',amount:cartTotal(),flat:true})}`:cartEmptyHTML()}`}
 
-function receiptHTML(items,tot,stamped){return `<div class="slot" data-l="${t('receipt')}"${X('receipt')}></div><div class="receipt" id="receipt"><h3${X('brand')}>${t('brand')}</h3><div class="rcs">${items.slice(0,4).map(c=>`<div class="rc">${cupSVG(c)}</div>`).join('')}</div><ul class="rl">${items.map(c=>`<li><span><span class="q">${c.qty}×</span> ${esc(nm(D(c.drink)))}<small>${optsLine(c)}</small></span><b>${money(total(c)*c.qty)}</b></li>`).join('')}</ul><div class="rtot"><span${X('total')}>${t('total')}</span><span>${money(tot)}</span></div>${stamped?`<div class="paid"${X('paid')}>${t('paid')}</div>`:''}</div>`}
-function payView(){const P=S.pay;
- if(S.paid&&S.last){const o=S.last;return `${receiptHTML(o.items,o.total,true)}<div class="cheer"><div>${catSVG('happy')}</div><div class="bubble"${X('thx')}>${t('thx',{name:o.name||tp('friend')},true)}</div></div>
-<div class="thanks"><h2 class="bub-p"${X('thanksH')}>${t('thanksH')}</h2><div class="ticket"><small${X('yourOrder')}>${t('yourOrder')}</small><b>${esc(orderNo(o.no))}</b><small${X('etaReady')}>${t('etaReady',{from:clock(new Date(S.ready[0])),to:clock(new Date(S.ready[1]))})}</small></div><p style="font-weight:900;margin:8px 0 2px"${X('stampCard')}>${t('stampCard')}</p><div class="scard">${Array.from({length:8},(_,i)=>`<i class="${i<S.stamps?'st':''}">${i<S.stamps?pawSVG('#ff4f86'):''}</i>`).join('')}</div><p class="small"${X(S.stamps>=8?'cardFull':'more')}>${S.stamps>=8?t('cardFull'):t('more',{count:8-S.stamps})}</p><button class="cta g" data-act="again"${X('again')}>${t('again')}</button></div>${EDIT?`<span${X('friend')} class="small" style="display:block;text-align:center;margin-top:8px;opacity:.7">${t('friend')}</span>`:''}<div style="height:30px"></div>`}
- return `${prog()}${receiptHTML(S.cart,cartTotal(),false)}
+/* fee: the delivery fee, shown as its own line above the total */
+function receiptHTML(items,tot,stamped,fee=0){items=items.filter(c=>D(c.drink));return `<div class="slot" data-l="${t('receipt')}"${X('receipt')}></div><div class="receipt" id="receipt"><h3${X('brand')}>${t('brand')}</h3><div class="rcs">${items.slice(0,4).map(c=>`<div class="rc">${cupSVG(c)}</div>`).join('')}</div><ul class="rl">${items.map(c=>`<li><span><span class="q">${c.qty}×</span> ${esc(nm(D(c.drink)))}<small>${optsLine(c)}</small></span><b>${money(total(c)*c.qty)}</b></li>`).join('')}</ul>${+fee>0?`<div class="rsub"><span${X('subtotal')}>${t('subtotal')}</span><span>${money(tot-fee)}</span></div><div class="rsub"><span${X('feeL')}>${t('feeL')}</span><span>${money(fee)}</span></div>`:''}<div class="rtot"><span${X('total')}>${t('total')}</span><span>${money(tot)}</span></div>${stamped?`<div class="paid"${X('paid')}>${t('paid')}</div>`:''}</div>`}
+function payView(){const P=S.pay,MODES=EDIT?['pickup','delivery']:modesOn(),METHODS=EDIT?PAYS:paysOn();
+ if(S.paid&&S.last){const o=S.last,pick=(o.mode||'pickup')==='pickup';return `${receiptHTML(o.items,o.total,true,o.fee||0)}<div class="cheer"><div>${catSVG('happy')}</div><div class="bubble"${X('thx')}>${t('thx',{name:o.name||tp('friend')},true)}</div></div>
+<div class="thanks"><h2 class="bub-p"${X('thanksH')}>${t('thanksH')}</h2><div class="ticket"><small${X('yourOrder')}>${t('yourOrder')}</small><b>${esc(orderNo(o.no))}</b><small${X('etaReady')}>${t('etaReady',{from:clock(new Date(S.ready[0])),to:clock(new Date(S.ready[1]))})}</small></div>
+${pick&&(o.id||EDIT)?`<div class="outbox"><p${X('outsideHint')}>${t('outsideHint')}</p>${outBtn(o)}<p class="err" id="outerr" role="alert"></p></div>`:''}
+<p style="font-weight:900;margin:8px 0 2px"${X('stampCard')}>${t('stampCard')}</p><div class="scard">${Array.from({length:8},(_,i)=>`<i class="${i<S.stamps?'st':''}">${i<S.stamps?pawSVG('#ff4f86'):''}</i>`).join('')}</div><p class="small"${X(S.stamps>=8?'cardFull':'more')}>${S.stamps>=8?t('cardFull'):t('more',{count:8-S.stamps})}</p><button class="cta g" data-act="again"${X('again')}>${t('again')}</button></div>${pick?locCard():''}${EDIT?`<span${X('friend')} class="small" style="display:block;text-align:center;margin-top:8px;opacity:.7">${t('friend')}</span>`:''}<div style="height:30px"></div>`}
+ return `${prog()}${receiptHTML(S.cart,payTotal(),false,payFee())}
 <div class="cheer"><div>${catSVG('hi')}</div><div class="bubble" id="catsay"${X('almost')}>${t('almost')}</div></div>
 <form class="form" data-form="pay" novalidate><h2${X('howWant')}>${t('howWant')}</h2>
-<div class="switch ${P.mode==='delivery'?'r':''}" role="group"><span class="knob"></span>${['pickup','delivery'].map(k=>`<button type="button" class="${P.mode===k?'on':''}" aria-pressed="${P.mode===k}" data-act="mode" data-a="${k}"${X(k)}>${t(k)}</button>`).join('')}</div>
+${MODES.length>1?`<div class="switch ${P.mode==='delivery'?'r':''}" role="group"><span class="knob"></span>${MODES.map(k=>`<button type="button" class="${P.mode===k?'on':''}" aria-pressed="${P.mode===k}" data-act="mode" data-a="${k}"${X(k)}>${t(k)}</button>`).join('')}</div>`
+ :`<div class="onemode"${X(MODES[0])}>${MODES[0]==='delivery'?'🛵':'🛍️'} ${t(MODES[0])}</div>`}
 <label><span${X('name')}>${t('name')}</span><input data-pf="name" value="${esc(P.name)}" autocomplete="name" placeholder="${t('namePh')}"${XP('namePh')}></label>
 <label><span${X('phone')}>${t('phone')}</span><input data-pf="phone" value="${esc(P.phone)}" inputmode="tel" autocomplete="tel" placeholder="${t('phonePh')}"${XP('phonePh')}></label>
-${P.mode==='delivery'?`<label><span${X('addr')}>${t('addr')}</span><input data-pf="addr" value="${esc(P.addr)}" autocomplete="street-address" placeholder="${t('addrPh')}"${XP('addrPh')}></label>`:`<p class="small" style="margin-top:-2px"${X('pickNote')}>${t('pickNote')}</p>`}
+${P.mode==='delivery'?`<label><span${X('addr')}>${t('addr')}</span><input data-pf="addr" value="${esc(P.addr)}" autocomplete="street-address" placeholder="${t('addrPh')}"${XP('addrPh')}></label>${payFee()>0?`<p class="feen"${X('feeNote')}>🛵 ${t('feeNote',{fee:moneyL(payFee(),ix())},true)}</p>`:''}`:`<p class="small" style="margin-top:-2px"${X('pickNote')}>${t('pickNote')}</p>${locCard()}`}
 <label><span${X('notes')}>${t('notes')}</span><textarea data-pf="notes" rows="3" maxlength="500" placeholder="${t('notesPh')}"${XP('notesPh')}>${esc(P.notes)}</textarea></label>
 <h2 style="font-size:18px;margin:6px 0 10px"${X('payWith')}>${t('payWith')}</h2>
-<div class="meth" role="group">${['cash','card'].map(k=>`<button type="button" class="${P.method===k?'on':''}" aria-pressed="${P.method===k}" data-act="method" data-a="${k}"${X(k)}>${t(k)}</button>`).join('')}</div>
-<div class="tapbox"><svg viewBox="0 0 52 64"><rect x="6" y="4" width="40" height="56" rx="9" fill="#fff" stroke="${L}" stroke-width="3"/><path d="M26 40C17 34 15 29 16 26C17 22 23 21 26 26C29 21 35 22 36 26C37 29 35 34 26 40Z" fill="#ff8fb1" stroke="${L}" stroke-width="2"/><path d="M20 10h12" stroke="${L}" stroke-width="3" stroke-linecap="round"/></svg><span${X('payNote')}>${t('payNote')}</span></div>
+<div class="meth ${METHODS.length===1?'one':''}" role="group">${METHODS.map(k=>`<button type="button" class="${P.method===k?'on':''}" aria-pressed="${P.method===k}" data-act="method" data-a="${k}"${X(k)}>${t(k)}</button>`).join('')}</div>
+${P.method==='transfer'&&!EDIT?`<div class="tapbox tr"><span><b${X('transferNote')}>${t('transferNote')}</b>${SET.transfer?`<span class="trinfo">${esc(SET.transfer)}</span>`:''}</span></div>`
+ :`<div class="tapbox"><svg viewBox="0 0 52 64"><rect x="6" y="4" width="40" height="56" rx="9" fill="#fff" stroke="${L}" stroke-width="3"/><path d="M26 40C17 34 15 29 16 26C17 22 23 21 26 26C29 21 35 22 36 26C37 29 35 34 26 40Z" fill="#ff8fb1" stroke="${L}" stroke-width="2"/><path d="M20 10h12" stroke="${L}" stroke-width="3" stroke-linecap="round"/></svg><span${X('payNote')}>${t('payNote')}</span></div>`}
 <p class="eta"${X('etaWill')}>${t('etaWill')}</p>
 <p class="err" id="perr" role="alert"></p>
-<button class="hold" id="hold" type="button"><span class="hf" id="hf"></span><span class="ht" id="ht"${X('placeBtn')}>${t('placeBtn',{total:moneyL(cartTotal(),ix())})}</span></button>
+<button class="hold" id="hold" type="button"><span class="hf" id="hf"></span><span class="ht" id="ht"${X('placeBtn')}>${t('placeBtn',{total:moneyL(payTotal(),ix())})}</span></button>
 <p class="small" style="text-align:center;margin:10px 0 0"${X('holdNote')}>${t('holdNote')}</p>
 </form><div style="height:30px"></div>`}
 
@@ -352,12 +393,20 @@ function galleryView(){const card=(cap,body)=>`<div class="gc"><h3>${cap}</h3>${
  ${card('شارة المشروب في المنيو',`<div class="row" style="gap:20px;padding:10px 0"><span class="info" style="margin:0;padding:10px 16px;box-shadow:none"><span class="tags2" style="position:static;display:inline-block"${X('fav')}>${t('fav')}</span></span><span class="info" style="margin:0;padding:10px 16px;box-shadow:none"><span class="tags2" style="position:static;display:inline-block"${X('newT')}>${t('newT')}</span></span></div>`)}
  ${card('زر حفظ المشروب لما العميل يعدّل مشروب في السلة',`<div style="text-align:center"><button class="cta wig"${X('saveItem')}>${t('saveItem')}</button></div>`)}
  ${card('لما تكمل بطاقة الأختام',`<p class="small"${X('cardFull')}>${t('cardFull')}</p>`)}
+ ${card('زر «أنا برا المحل» بعد ما يضغطه العميل',`<div style="text-align:center"><button class="cta outb sent" type="button"${X('notified')}>${t('notified')}</button></div><p class="err"${X('outsideErr')}>${t('outsideErr')}</p>`)}
+ ${card('شريط الطلب في الصفحة الرئيسية (لطلبات الاستلام)',`<div class="lastbar" style="margin:0"><div><b${X('myOrder')}>${t('myOrder',{order:`<bdi dir="ltr">${esc(orderNo('1234'))}</bdi>`})}</b><span class="lnk"${X('seeOrder')}>${t('seeOrder')}</span></div></div>`)}
+ ${card('رسوم التوصيل (تطلع لطلبات التوصيل لما يكون لها رسوم)',`<p class="feen"${X('feeNote')}>🛵 ${t('feeNote',{fee:moneyL(+SET.fee||10,ix())},true)}</p><div class="rsub"><span${X('subtotal')}>${t('subtotal')}</span><span>${money(52)}</span></div><div class="rsub"><span${X('feeL')}>${t('feeL')}</span><span>${money(+SET.fee||10)}</span></div>`)}
+ ${card('الدفع بالتحويل البنكي',`<div class="tapbox tr" style="margin:0"><span><b${X('transferNote')}>${t('transferNote')}</b><span class="trinfo">${esc(SET.transfer||'…')}</span></span></div>`)}
+ ${card('موقع المحل لطلبات الاستلام',`<div class="where" style="margin:0"><h3${X('whereH')}>${t('whereH')}</h3><div class="mapbtns"><span class="ghost"${X('openG')}>📍 ${t('openG')}</span><span class="ghost"${X('openA')}>🧭 ${t('openA')}</span></div></div>`)}
+ ${card('لما المحل يغيّر طرق الاستلام أو الدفع والعميل في صفحة الطلب',`<p class="err"${X('eSettings')}>${t('eSettings')}</p>`)}
  ${card('كلمات ما تنشاف، يقرأها الجوال بصوت عالي للمكفوفين',`<div class="row">${['home','back','prev','next','cartLabel','langLabel','caught','catTap'].map(k=>`<span class="chip"${X(k)}>${t(k)}</span>`).join('')}</div>`)}
  </div>`}
-function waView(){const o={no:'1234',name:LANG==='ar'?'سارة':'Sara',lang:LANG,items:snap(S.cart),total:cartTotal()};
+function waView(){const o={no:'1234',name:LANG==='ar'?'سارة':'Sara',lang:LANG,items:snap(S.cart),total:cartTotal()},fee=+SET.fee||10,od=Object.assign({},o,{fee,total:o.total+fee});
  return `<div class="mhead"><h1 class="bub-g">رسائل واتساب</h1></div><div class="gal">
  <div class="gc"><h3>زر «واتساب» في صفحة الطلبات (مثال بطلب تجريبي)</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waOrder')}>${esc(waText('waOrder',o))}</div></div></div>
- <div class="gc"><h3>زر «تم التجهيز» يرسل هذي الرسالة</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waReady')}>${esc(waText('waReady',o))}</div></div></div>
+ <div class="gc"><h3>نفس الرسالة لطلب توصيل: سطر رسوم التوصيل ينضاف تحت المشروبات</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"><span${X('waFee')}>${esc(waText('waOrder',od))}</span></div></div></div>
+ <div class="gc"><h3>طلب استلام: زر «تم التجهيز» يرسل هذي الرسالة</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waReady')}>${esc(waText('waReady',o))}</div></div></div>
+ <div class="gc"><h3>طلب توصيل: زر «طلع للتوصيل» يرسل هذي الرسالة</h3><div class="wa"><span class="wh">${esc(o.name)}</span><div class="wb"${X('waWay')}>${esc(waText('waWay',o))}</div></div></div>
  <p class="small" style="text-align:center">العميل يستلم الرسالة باللغة اللي طلب فيها</p></div>`}
 
 /* ================= render ================= */
@@ -415,25 +464,50 @@ function validate(){const f=$('[data-form=pay]'),P=S.pay,g=k=>(f.querySelector(`
  if(P.mode==='delivery'&&g('addr').length<5)return['addr',tp('eAddr')];
  return null}
 function showErr(v){const h=$('#hold');$('#perr').textContent=v[1];if(h){h.classList.remove('shake');void h.offsetWidth;h.classList.add('shake')}const i=v[0]&&$(`[data-pf=${v[0]}]`);i&&i.focus();const c=$('#catsay');if(c)c.textContent=tp('missing')}
+/* from the first tap until the shop answers, the button is locked and shows it's working */
+function lockHold(on){const h=$('#hold'),ht=$('#ht');if(!h)return;h.disabled=on;h.classList.toggle('busy',on);h.setAttribute('aria-busy',on?'true':'false');if(on){h.classList.add('go');ht.innerHTML=`<i class="spin" aria-hidden="true"></i>${t('placing')}`}}
 function bindPay(){const h=$('#hold');if(!h)return;let t0=0,raf=0;const hf=$('#hf'),ht=$('#ht');
- const stop=()=>{holdActive=false;cancelAnimationFrame(raf);h.classList.remove('go');hf.style.transition='';hf.style.width='0';ht.innerHTML=t('placeBtn',{total:moneyL(cartTotal(),ix())})};
- const finish=()=>{holdActive=false;cancelAnimationFrame(raf);hf.style.transition='width .18s';hf.style.width='100%';ht.textContent=tp('placing');sendOrder().then(ok=>{if(!ok&&h.isConnected)stop()})};
+ const stop=()=>{holdActive=false;cancelAnimationFrame(raf);lockHold(false);h.classList.remove('go');hf.style.transition='';hf.style.width='0';ht.innerHTML=t('placeBtn',{total:moneyL(payTotal(),ix())})};
+ const go=()=>{lockHold(true);sendOrder().then(ok=>{if(!ok&&h.isConnected)stop()})};
+ const finish=()=>{holdActive=false;cancelAnimationFrame(raf);hf.style.transition='width .18s';hf.style.width='100%';go()};
  const tick=()=>{const p=Math.min(1,(performance.now()-t0)/900);hf.style.width=p*100+'%';if(p>=1){finish();return}raf=requestAnimationFrame(tick)};
- h.addEventListener('pointerdown',e=>{e.preventDefault();if(holdActive||S.sending)return;const v=validate();if(v){showErr(v);return}$('#perr').textContent='';holdActive=true;h.classList.add('go');ht.textContent=tp('placing');$('#catsay').textContent=tp('nearly');t0=performance.now();raf=requestAnimationFrame(tick)});
+ h.addEventListener('pointerdown',e=>{e.preventDefault();if(holdActive||S.sending||h.disabled)return;const v=validate();if(v){showErr(v);return}$('#perr').textContent='';holdActive=true;h.classList.add('go');ht.textContent=tp('placing');$('#catsay').textContent=tp('nearly');t0=performance.now();raf=requestAnimationFrame(tick)});
  /* letting go early still sends: a quick tap works the same as a full hold */
  h.addEventListener('pointerup',()=>{if(holdActive)finish()});
  ['pointerleave','pointercancel'].forEach(ev=>h.addEventListener(ev,()=>{if(holdActive)stop()}));
  h.addEventListener('contextmenu',e=>e.preventDefault());
- h.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(S.sending)return;const v=validate();if(v)showErr(v);else{h.classList.add('go');ht.textContent=tp('placing');sendOrder().then(ok=>{if(!ok&&h.isConnected)stop()})}}})}
-async function sendOrder(){if(S.sending||S.paid)return false;S.sending=true;const P=S.pay;
- const body={name:P.name,phone:P.phone,mode:P.mode,addr:P.addr,notes:P.notes,method:P.method,lang:LANG,items:S.cart.map(c=>({drink:c.drink,size:c.size,milk:c.milk,ad:c.ad,qty:c.qty}))};
- try{const r=await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));
-  if(!r.ok){S.sending=false;
-   if(j.error==='menu'||j.error==='items'){await loadShop();fixCart();S.step='cart';render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eMenu');$('main')?.prepend(p);return false}
-   const map={name:['name','eName'],phone:['phone','ePhone'],addr:['addr','eAddr']}[j.error];showErr(map?[map[0],tp(map[1])]:['',tp('eServer')]);return false}
-  S.last={no:j.no,items:clone(S.cart),total:j.total,name:P.name};S.cart=[];saveCart();S.pay.notes='';
-  S.paid=true;S.ready=readyWin();S.stamps=Math.min(8,S.stamps+1);lsSet('mm-stamps',S.stamps);S.sending=false;render(true);setTimeout(()=>rain('mix',60),200);return true}
- catch(e){S.sending=false;showErr(['',tp('eServer')]);return false}}
+ h.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(S.sending||holdActive||h.disabled)return;const v=validate();if(v)showErr(v);else{hf.style.width='100%';go()}}})}
+/* every order gets its own id here, before it is sent. The same id goes with every retry, so the shop
+   saves it once even if the internet is slow, the button is tapped twice, or the page is reloaded mid-send. */
+const newCid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}const a=new Uint8Array(16);crypto.getRandomValues(a);return [...a].map(b=>b.toString(16).padStart(2,'0')).join('')};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function postOrder(body){let last={r:null,j:{}};
+ for(let i=0;i<3;i++){if(i)await sleep(1500*i);
+  const ac=window.AbortController?new AbortController():null,to=setTimeout(()=>ac&&ac.abort(),15000);
+  try{const r=await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:ac?.signal});const j=await r.json().catch(()=>({}));
+   if(r.status>=500||r.status===408||r.status===429){last={r,j};continue}
+   return {r,j}}
+  catch(e){last={r:null,j:{}}}
+  finally{clearTimeout(to)}}
+ return last}
+async function sendOrder(){if(S.sending||S.paid)return false;S.sending=true;lockHold(true);const P=S.pay;
+ const items=S.cart.map(c=>({drink:c.drink,size:c.size,milk:c.milk,ad:c.ad,qty:c.qty})),sig=JSON.stringify([items,P.mode]);
+ /* same drinks as an unfinished try: it's the same order, so it keeps the same id */
+ let pend=lsGet(PENDK,null);if(!pend||pend.sig!==sig||Date.now()-(+pend.at||0)>6*3600e3){pend={cid:newCid(),sig,at:Date.now()};lsSet(PENDK,pend)}
+ const body={cid:pend.cid,at:pend.at,name:P.name,phone:P.phone,mode:P.mode,addr:P.addr,notes:P.notes,method:P.method,lang:LANG,items};
+ const {r,j}=await postOrder(body);
+ if(!r||!r.ok){S.sending=false;
+  if(r&&(j.error==='menu'||j.error==='items')){await loadShop().catch(()=>{});fixCart();S.step='cart';render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eMenu');$('main')?.prepend(p);return false}
+  if(r&&(j.error==='mode'||j.error==='method')){await loadShop().catch(()=>{});render(true);const p=document.createElement('p');p.className='oops';p.textContent=tp('eSettings');$('main')?.prepend(p);return false}
+  const map=r&&{name:['name','eName'],phone:['phone','ePhone'],addr:['addr','eAddr']}[j.error];showErr(map?[map[0],tp(map[1])]:['',tp('eServer')]);return false}
+ try{localStorage.removeItem(PENDK)}catch(e){}
+ S.ready=readyWin();
+ S.last={id:j.id,cid:pend.cid,no:j.no,items:clone(S.cart),total:j.total,fee:+j.fee||0,mode:j.mode||P.mode,name:P.name,at:Date.now(),ready:S.ready};lsSet(LASTK,S.last);
+ S.cart=[];saveCart();S.pay.notes='';
+ S.paid=true;S.stamps=typeof j.stamps==='number'?j.stamps:Math.min(8,S.stamps+1);lsSet('mm-stamps',S.stamps);S.sending=false;render(true);setTimeout(()=>rain('mix',60),200);return true}
+/* the stamp count the shop has for this order's phone (the admin can change it) */
+async function refreshTrack(L){if(!L||!L.id||!L.cid)return;try{const r=await fetch(`/api/track/${encodeURIComponent(L.id)}?k=${encodeURIComponent(L.cid)}`,{cache:'no-store'});if(!r.ok)return;const j=await r.json();
+ if(typeof j.stamps==='number'&&j.stamps!==S.stamps){S.stamps=j.stamps;lsSet('mm-stamps',S.stamps);if(S.paid&&S.step==='pay'&&S.last&&S.last.id===L.id){const y=scrollY;render();scrollTo(0,y)}}}catch(e){}}
 
 /* ================= Mochi's mischief: he only repaints things, nothing moves ================= */
 const MI={t:0,busy:false};
@@ -490,6 +564,16 @@ const ACT={
  mode:a=>{S.pay.mode=a;keepPay();render()},
  method:a=>{S.pay.method=a;keepPay();render()},
  again:()=>{S.paid=false;S.o=newOrder(null);S.step='drink';render(true)},
+ /* the pickup order from earlier, opened from the bar on the home page */
+ myorder:()=>{const L=recentPickup();if(!L)return;S.last=L;S.ready=L.ready||readyWin();S.paid=true;S.edit=null;S.step='pay';render(true);refreshTrack(L)},
+ /* "I'm outside": tells the store once, then rests for a short while so it can't be spammed */
+ outside:async(a,el)=>{const L=S.paid&&S.last&&S.last.id?S.last:recentPickup();if(!L||!L.id||!L.cid||outCool(L)||el.disabled)return;
+  el.disabled=true;el.classList.add('busy');const er=$('#outerr');if(er)er.textContent='';let ok=false;
+  try{const r=await fetch('/api/track/'+encodeURIComponent(L.id),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({k:L.cid,outside:true})});const j=await r.json().catch(()=>({}));ok=r.ok;if(ok&&typeof j.stamps==='number'){S.stamps=j.stamps;lsSet('mm-stamps',S.stamps)}}catch(e){}
+  if(!ok){el.disabled=false;el.classList.remove('busy');const e2=$('#outerr');if(e2)e2.textContent=tp('outsideErr');else alert(tp('outsideErr'));return}
+  L.outAt=Date.now();const st=lsGet(LASTK,null);if(st&&st.id===L.id){st.outAt=L.outAt;lsSet(LASTK,st)}if(S.last&&S.last.id===L.id)S.last.outAt=L.outAt;
+  const swap=()=>$$('[data-act=outside]').forEach(b=>{b.outerHTML=outBtn(L)});swap();
+  const r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top,8,'h');setTimeout(swap,OUT_COOL+200)},
  boing:(a,el)=>{el.classList.remove('boing');void el.offsetWidth;el.classList.add('boing')},
  spin:(a,el)=>{el.classList.remove('spin');void el.offsetWidth;el.classList.add('spin')},
  pop:(a,el)=>{const r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2,8,'h');el.classList.add('popped');setTimeout(()=>el.classList.remove('popped'),2600)},
@@ -501,7 +585,9 @@ const keepPay=()=>{const P=S.pay;lsSet('mm-pay',{name:P.name,phone:P.phone,addr:
 
 /* ================= data ================= */
 async function loadShop(){const r=await fetch('/api/shop',{cache:'no-store'});if(!r.ok)throw new Error('shop '+r.status);const j=await r.json();if(!EDIT)lsSet('mm-shop',j);return useShop(j)}
-function useShop(j){const before=JSON.stringify([STORE,OV,BRAND]);STORE=j.menu;if(!EDIT)OV=j.texts||{};setBrand(j.brand);fixCart();if(S.o.drink&&!D(S.o.drink))S.o=newOrder(null);return before!==JSON.stringify([STORE,OV,BRAND])}
+function useShop(j){const before=JSON.stringify([STORE,OV,BRAND,SET]);STORE=j.menu;if(!EDIT)OV=j.texts||{};setBrand(j.brand);setSettings(j.settings);fixCart();fixPay();if(S.o.drink&&!D(S.o.drink))S.o=newOrder(null);return before!==JSON.stringify([STORE,OV,BRAND,SET])}
+/* the customer only gets the ways to receive and pay that the store has turned on */
+function fixPay(){if(EDIT)return;const m=modesOn(),p=paysOn();if(!m.includes(S.pay.mode))S.pay.mode=m[0];if(!p.includes(S.pay.method))S.pay.method=p[0]}
 
 /* ================= editor preview (index.html?edit=1 inside the admin's text editor) ================= */
 let EST='land';
@@ -512,7 +598,7 @@ function editState(st){EST=st;S.paid=false;S.edit=null;
  S.pay={mode:st==='delivery'?'delivery':'pickup',method:'cash',name:'',phone:'',addr:'',notes:''};
  S.step={land:'land',drink:'drink',machine:'machine',cart:'cart',pickup:'pay',delivery:'pay',done:'pay',msgs:'msgs',wa:'wa'}[st]||'land';
  S.cf=0;S.o=newOrder(d0.id);
- if(st==='done'){S.paid=true;S.last={no:'1234',items:S.cart,total:cartTotal(),name:''};S.ready=readyWin();S.stamps=3}
+ if(st==='done'){S.paid=true;S.last={no:'1234',items:S.cart,total:cartTotal(),name:'',mode:'pickup',fee:0};S.ready=readyWin();S.stamps=3}
  render(true)}
 let postT=0;
 function edited(){clearTimeout(postT);postT=setTimeout(()=>{const app=$('#app');const keys=[...new Set($$('[data-tx],[data-txph]').map(e=>e.dataset.tx||e.dataset.txph))].join();parent.postMessage({mm:'rendered',st:EST,keys,h:Math.ceil(app.getBoundingClientRect().height)},location.origin)},30)}

@@ -25,9 +25,9 @@ h1,h2,h3{margin:0;font-weight:400;line-height:1.1;text-wrap:balance}
 .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fffdfaee;backdrop-filter:blur(6px)}
 .top::after{content:"";position:absolute;left:0;right:0;top:100%;height:10px;background:radial-gradient(circle at 10px 0,#ffd3e0 9px,transparent 9.5px) 0 0/20px 10px repeat-x}
 .logo{display:flex;align-items:center;gap:6px;background:none;border:0;padding:0;margin-inline-end:auto}
-.logo svg{width:38px;height:38px}.logo b{font-family:var(--fs);font-weight:400;font-size:20px;color:var(--berry);white-space:nowrap}
+.logo svg,.logo .blogo{width:calc(38px*var(--lgs,1));height:calc(38px*var(--lgs,1))}.logo b{font-family:var(--fs);font-weight:400;font-size:20px;color:var(--berry);white-space:nowrap}
 [dir=rtl] .logo b{font-weight:800;font-size:21px}
-@media(max-width:400px){.top{padding:8px 10px;gap:6px}.logo b{font-size:16px}[dir=rtl] .logo b{font-size:17px}.top .pill{padding:5px 9px}}
+@media(max-width:400px){.top{padding:8px 10px;gap:6px}.logo svg,.logo .blogo{width:min(calc(38px*var(--lgs,1)),50px);height:min(calc(38px*var(--lgs,1)),50px)}.logo b{font-size:16px}[dir=rtl] .logo b{font-size:17px}.top .pill{padding:5px 9px}}
 .pill{border:2.5px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-weight:900;font-size:14px;min-height:40px;display:inline-flex;align-items:center;gap:6px;box-shadow:0 3px 0 var(--line)}
 .pill:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 .pill.lang{min-width:42px;justify-content:center;font-family:var(--fb);font-size:15px}
@@ -321,10 +321,9 @@ footer{text-align:center;padding:18px 16px 34px;font-size:13px;color:var(--mut)}
 .receipt .rcs{display:flex;justify-content:center;gap:4px;flex-wrap:wrap}
 .receipt .rcs .rc{width:70px;margin:4px 0}
 .loading{min-height:70vh;display:grid;place-items:center;text-align:center;font-weight:900;color:var(--berry)}
-.loading svg,.loading .blogo{width:90px;height:90px;animation:float 1.6s ease-in-out infinite}
+.loading svg,.loading .blogo{width:calc(90px*var(--lgs,1));height:calc(90px*var(--lgs,1));animation:float 1.6s ease-in-out infinite}
 /* the store's own logo, when the owner uploaded one */
 .blogo{object-fit:contain;display:block;flex:none;border-radius:10px}
-.logo .blogo{width:38px;height:38px}
 .oops{margin:16px 12px 0;background:#fff1f3;border:2.5px dashed #d6245b;border-radius:18px;padding:10px 14px;font-weight:900;color:#d6245b;text-align:center}
 /* the editor preview: everything holds still so arrows can find each text */
 html.edit *,html.edit *::before,html.edit *::after{animation:none!important;transition:none!important}
@@ -349,3 +348,43 @@ html.edit [data-tx].txon,html.edit [data-txph].txon{outline:3px dashed var(--ber
 [dir=rtl] .wa .wb{justify-self:start;border-radius:12px 12px 12px 4px}
 .wa .wh{font-size:12px;font-weight:900;color:#54656f}
 .prog i{width:14px}.prog span{padding:4px 10px}
+/* the send button while the order is on its way: locked, with a little spinner */
+.hold:disabled{cursor:progress;opacity:1;color:#fff}
+.hold.busy .hf{width:100%!important;background:repeating-linear-gradient(-45deg,#8cc152 0 14px,#7ab53f 14px 28px) 0 0/40px 40px;animation:barber .8s linear infinite}
+@keyframes barber{to{background-position:40px 0}}
+.spin{width:18px;height:18px;border-radius:50%;border:3px solid #fff8;border-top-color:#fff;display:inline-block;animation:spin .7s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.hold.busy .hf,.spin{animation-duration:2.4s}}
+/* only one way to receive the order */
+.onemode{text-align:center;background:var(--pink3);border:2.5px solid var(--line);border-radius:999px;padding:9px 14px;margin-bottom:14px;font-weight:900}
+.feen{margin:-4px 0 12px;background:var(--pink3);border:2px dashed var(--pink);border-radius:14px;padding:6px 12px;font-weight:800;font-size:14px}
+.feen b{color:var(--berry-d);white-space:nowrap}
+.rsub{display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:14px;color:var(--mut);padding:2px 0}
+.rsub span:last-child{white-space:nowrap}
+.meth.one{grid-template-columns:1fr}
+.tapbox.tr{display:block}
+.tapbox.tr b{display:block;margin-bottom:4px}
+.trinfo{display:block;white-space:pre-wrap;direction:ltr;text-align:start;background:#fff;border:2px solid var(--line);border-radius:12px;padding:8px 10px;font-weight:800;user-select:all;-webkit-user-select:all;unicode-bidi:plaintext}
+/* where to pick the order up */
+.where{margin:4px 0 14px;background:var(--green3);border:2.5px solid var(--line);border-radius:22px;padding:12px;text-align:center}
+.thanks+.where{margin:16px 12px 0}
+.where h3{font-family:var(--fd);font-size:17px;margin:0 0 8px;color:var(--leaf)}
+.wmap{display:block;position:relative;border:2.5px solid var(--line);border-radius:16px;overflow:hidden;height:170px;background:#e8eee0}
+.wmap .tiles{position:absolute;left:50%;top:50%}
+.wmap .tiles img{position:absolute;width:256px;height:256px;max-width:none;user-select:none}
+.wmap .tpin{position:absolute;left:50%;top:50%;transform:translate(-50%,-92%);font-size:34px;line-height:1;filter:drop-shadow(0 3px 2px #0005)}
+.wmap .tattr{position:absolute;right:0;bottom:0;background:#fffc;font-size:10px;padding:1px 5px;color:#333;border-top-left-radius:6px}
+.wnote{margin:8px 0 0;font-weight:800;font-size:14px}
+.mapbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mapbtns .ghost{display:inline-flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;color:var(--ink);font-size:14px;padding:9px 8px}
+/* "I'm outside" */
+.outbox{background:#fff;border:3px solid var(--line);border-radius:22px;padding:12px;margin:6px 0 12px;box-shadow:4px 5px 0 var(--pink)}
+.outbox p{margin:0 0 10px;font-weight:800;font-size:14px}
+.outbox .err{margin:8px 0 0}
+.outb{width:100%;font-size:19px;background:#ff9f1c}
+.outb.sent,.outb:disabled{background:var(--green);cursor:default;transform:none;box-shadow:0 3px 0 var(--line)}
+.outb.busy{opacity:.7}
+.lastbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 12px;background:#fff;border:3px solid var(--line);border-radius:22px;padding:10px 12px;box-shadow:4px 5px 0 #ff9f1c}
+.lastbar>div{flex:1 1 150px;display:flex;flex-direction:column;align-items:flex-start}
+.lastbar .lnk{padding:2px 0;min-height:32px}
+.lastbar .outb{flex:1 1 180px;width:auto;min-height:50px;font-size:17px;padding:8px 14px}
